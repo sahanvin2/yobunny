@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String          @id @default(cuid())
+  firebaseUid     String          @unique
+  username        String          @unique
+  displayName     String
+  email           String          @unique
+  avatarUrl       String?
+  bio             String?
+  bannerUrl       String?
+  profileImageUrl String?
+  subscriberCount Int             @default(0)
+  totalViews      Int             @default(0)
+  isVerified      Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  videos          Video[]
+  comments        Comment[]
+  replies         Reply[]
+  likes           VideoLike[]
+  subscriptions   Subscription[]  @relation("subscriber")
+  subscribers     Subscription[]  @relation("channel")
+  watchHistory    WatchHistory[]
+  notifications   Notification[]
+  notificationsSent Notification[] @relation("fromUser")
+  savedVideos     SavedVideo[]
+  livestreams     Livestream[]
+}
+
+model Video {
+  id           String        @id @default(cuid())
+  title        String
+  description  String?
+  thumbnailUrl String?
+  rawFileKey   String
+  hlsBaseUrl   String?
+  duration     Int?
+  status       VideoStatus   @default(PROCESSING)
+  visibility   Visibility    @default(PUBLIC)
+  category     Category
+  tags         String[]
+  viewCount    Int           @default(0)
+  likeCount    Int           @default(0)
+  commentCount Int           @default(0)
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  comments     Comment[]
+  likes        VideoLike[]
+  watchHistory WatchHistory[]
+  savedBy      SavedVideo[]
+  qualities    VideoQuality[]
+
+  @@index([status, publishedAt, viewCount, userId, category])
+}
+
+model VideoQuality {
+  id         String @id @default(cuid())
+  videoId    String
+  video      Video  @relation(fields: [videoId], references: [id])
+  resolution String
+  hlsUrl     String
+  fileKey    String
+  fileSize   BigInt
+  bitrate    Int
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  videoId   String
+  user      User     @relation(fields: [userId], references: [id])
+  video     Video    @relation(fields: [videoId], references: [id])
+  replies   Reply[]
+}
+
+model Reply {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  userId    String
+  commentId String
+  user      User     @relation(fields: [userId], references: [id])
+  comment   Comment  @relation(fields: [commentId], references: [id])
+}
+
+model VideoLike {
+  userId    String
+  videoId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  video     Video    @relation(fields: [videoId], references: [id])
+
+  @@id([userId, videoId])
+}
+
+model Subscription {
+  subscriberId String
+  channelId    String
+  createdAt    DateTime @default(now())
+  subscriber   User     @relation("subscriber", fields: [subscriberId], references: [id])
+  channel      User     @relation("channel", fields: [channelId], references: [id])
+
+  @@id([subscriberId, channelId])
+}
+
+model WatchHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  videoId      String
+  watchedAt    DateTime @default(now())
+  watchPercent Float    @default(0)
+  user         User     @relation(fields: [userId], references: [id])
+  video        Video    @relation(fields: [videoId], references: [id])
+}
+
+model SavedVideo {
+  userId  String
+  videoId String
+  savedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id])
+  video   Video    @relation(fields: [videoId], references: [id])
+
+  @@id([userId, videoId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  fromUserId String?
+  type      String
+  message   String
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  fromUser  User?    @relation("fromUser", fields: [fromUserId], references: [id])
+}
+
+model Livestream {
+  id         String   @id @default(cuid())
+  title      String
+  description String?
+  roomId     String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  status     String   @default("OFFLINE")
+  viewCount  Int      @default(0)
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  comments   LiveComment[]
+}
+
+model LiveComment {
+  id          String   @id @default(cuid())
+  livestreamId String
+  livestream  Livestream @relation(fields: [livestreamId], references: [id])
+  body        String
+  createdAt   DateTime @default(now())
+}
+
+enum VideoStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+  SCHEDULED
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum Category {
+  ENTERTAINMENT
+  MUSIC
+  GAMING
+  EDUCATION
+  TECHNOLOGY
+  SPORTS
+  NEWS
+  TRAVEL
+  FOOD
+  FASHION
+  HEALTH
+  COMEDY
+  FILM
+  CARS
+  PETS
+  DIY
+  SCIENCE
+  POLITICS
+  CULTURE
+  VLOGS
+}

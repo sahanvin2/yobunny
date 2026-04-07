@@ -1,0 +1,430 @@
+import type { VideoData, CommentData } from "@/lib/mockData";
+
+const rawApiBase = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+export const API_BASE = rawApiBase.replace(/\/$/, "");
+export const AUTO_CLIP_TAG = "__AUTO_CLIP__";
+
+type ApiUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bannerUrl?: string | null;
+  profileImageUrl?: string | null;
+  subscriberCount: number;
+  isVerified?: boolean;
+};
+
+type ApiVideo = {
+  id: string;
+  title: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  hlsBaseUrl?: string | null;
+  duration?: number | null;
+  status?: "UPLOADING" | "PROCESSING" | "READY" | "FAILED" | "SCHEDULED";
+  visibility?: "PUBLIC" | "PRIVATE" | "UNLISTED";
+  viewCount: number;
+  publishedAt?: string | null;
+  createdAt: string;
+  category: string;
+  tags: string[];
+  user?: ApiUser;
+};
+
+export type ApiLivestream = {
+  id: string;
+  title: string;
+  description?: string | null;
+  roomId: string;
+  status: "LIVE" | "OFFLINE" | "ENDED";
+  startedAt?: string | null;
+  endedAt?: string | null;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+  user?: ApiUser;
+};
+
+function mapUserToChannel(user?: ApiUser): VideoData["channel"] {
+  return {
+    username: user?.username || "unknown",
+    displayName: user?.displayName || "Unknown Creator",
+    avatarUrl: user?.avatarUrl || user?.profileImageUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff",
+    subscriberCount: user?.subscriberCount || 0,
+    isVerified: Boolean(user?.isVerified)
+  };
+}
+
+export function mapApiVideoToVideoData(video: ApiVideo): VideoData {
+  const fallbackThumb = `${API_BASE}/videos/${video.id}/thumbnail`;
+  return {
+    id: video.id,
+    title: video.title,
+    thumbnailUrl: video.thumbnailUrl || fallbackThumb,
+    hlsBaseUrl: video.hlsBaseUrl || undefined,
+    duration: video.duration || 0,
+    viewCount: video.viewCount,
+    publishedAt: video.publishedAt || video.createdAt,
+    category: video.category,
+    tags: video.tags || [],
+    channel: mapUserToChannel(video.user)
+  };
+}
+
+export function isAutoClipVideo(video: VideoData): boolean {
+  return Boolean(video.duration > 0 && video.duration <= 60 && video.tags.includes(AUTO_CLIP_TAG));
+}
+
+export function isClipLikeVideo(video: VideoData): boolean {
+  return isAutoClipVideo(video) || Boolean(video.duration > 0 && video.duration <= 60);
+}
+
+export async function fetchVideos(params?: { category?: string; sort?: "latest" | "views"; page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.category && params.category !== "All") query.set("category", params.category.toUpperCase());
+  if (params?.sort) query.set("sort", params.sort);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+
+  const res = await fetch(`${API_BASE}/videos?${query.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch videos");
+  const data = await res.json() as { items: ApiVideo[] };
+  return data.items.map(mapApiVideoToVideoData);
+}
+
+export async function fetchTrendingVideos() {
+  const res = await fetch(`${API_BASE}/videos/trending`);
+  if (!res.ok) throw new Error("Failed to fetch trending videos");
+  const data = await res.json() as { items: ApiVideo[] };
+  return data.items.map(mapApiVideoToVideoData);
+}
+
+export async function fetchSearchVideos(query: string, sort: "relevance" | "views" | "date") {
+  if (!query.trim()) return [] as VideoData[];
+  const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}&type=videos&sort=${sort}&page=1`);
+  if (!res.ok) throw new Error("Failed to search videos");
+  const data = await res.json() as { items: ApiVideo[] };
+  return data.items.map(mapApiVideoToVideoData);
+}
+
+export async function fetchSearchChannels(query: string) {
+  if (!query.trim()) return [] as ApiUser[];
+  const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}&type=users&sort=relevance&page=1`);
+  if (!res.ok) throw new Error("Failed to search channels");
+  const data = await res.json() as { items: ApiUser[] };
+  return data.items;
+}
+
+export async function fetchVideoById(id: string) {
+  const res = await fetch(`${API_BASE}/videos/${id}`);
+  if (!res.ok) throw new Error("Video not found");
+  const data = await res.json() as { item: ApiVideo & { user?: ApiUser; qualities?: Array<{ resolution: string; hlsUrl: string }> } };
+  return {
+    video: mapApiVideoToVideoData(data.item),
+    playbackUrl: data.item.hlsBaseUrl || "",
+    qualities: data.item.qualities || [],
+    description: data.item.description || "",
+    channel: mapUserToChannel(data.item.user)
+  };
+}
+
+export async function fetchVideoComments(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/comments`);
+  if (!res.ok) throw new Error("Failed to load comments");
+  const data = await res.json() as { items: CommentData[] };
+  return data.items;
+}
+
+export async function addComment(videoId: string, body: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body })
+  });
+  if (!res.ok) throw new Error("Failed to add comment");
+}
+
+export async function toggleLike(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/like`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to toggle like");
+  return res.json() as Promise<{ liked: boolean }>;
+}
+
+export async function toggleSave(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/save`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to toggle save");
+  return res.json() as Promise<{ saved: boolean }>;
+}
+
+export async function fetchSavedVideos() {
+  const res = await fetch(`${API_BASE}/users/me/saved`);
+  if (!res.ok) throw new Error("Failed to fetch saved videos");
+  const data = await res.json() as { items: Array<{ video: ApiVideo }> };
+  return data.items.map((item) => mapApiVideoToVideoData(item.video));
+}
+
+export async function fetchLikedVideos() {
+  const res = await fetch(`${API_BASE}/users/me/liked`);
+  if (!res.ok) throw new Error("Failed to fetch liked videos");
+  const data = await res.json() as { items: Array<{ video: ApiVideo }> };
+  return data.items.map((item) => mapApiVideoToVideoData(item.video));
+}
+
+export async function fetchHistoryVideos() {
+  const res = await fetch(`${API_BASE}/users/me/history`);
+  if (!res.ok) throw new Error("Failed to fetch history");
+  const data = await res.json() as { items: Array<{ video: ApiVideo; watchedAt: string; watchPercent: number }> };
+  return data.items;
+}
+
+export async function fetchMe() {
+  const res = await fetch(`${API_BASE}/auth/me`);
+  if (!res.ok) throw new Error("Failed to fetch current user");
+  const data = await res.json() as { user: ApiUser & { bio?: string | null; email?: string } };
+  return data.user;
+}
+
+export async function updateMe(payload: { displayName?: string; username?: string; bio?: string; avatarUrl?: string; bannerUrl?: string; profileImageUrl?: string }) {
+  const res = await fetch(`${API_BASE}/users/me`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to save profile" }));
+    throw new Error(data.error || "Failed to save profile");
+  }
+
+  return res.json();
+}
+
+export async function uploadProfileMedia(kind: "avatar" | "banner", file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/users/me/${kind}`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to upload image" }));
+    throw new Error(data.error || "Failed to upload image");
+  }
+
+  return res.json() as Promise<{ item: ApiUser & { bio?: string | null; email?: string } }>;
+}
+
+export async function fetchNotifications() {
+  const res = await fetch(`${API_BASE}/users/me/notifications`);
+  if (!res.ok) throw new Error("Failed to fetch notifications");
+  return (await res.json()) as { items: Array<{ id: string; message: string; type: string; createdAt: string; isRead: boolean }> };
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetch(`${API_BASE}/users/me/notifications/read-all`, { method: "PATCH" });
+  if (!res.ok) throw new Error("Failed to mark notifications as read");
+}
+
+export async function fetchDashboardStats() {
+  const res = await fetch(`${API_BASE}/users/me/dashboard`);
+  if (!res.ok) throw new Error("Failed to fetch dashboard");
+  return (await res.json()) as { item: { totalViews: number; subscribers: number; videoCount: number } };
+}
+
+export async function fetchMyVideos() {
+  const res = await fetch(`${API_BASE}/users/me/videos`);
+  if (!res.ok) throw new Error("Failed to fetch creator videos");
+  const data = await res.json() as { items: ApiVideo[] };
+  return data.items.filter((item) => item.status === "READY").map(mapApiVideoToVideoData);
+}
+
+export type ManageVideoItem = {
+  id: string;
+  title: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  duration?: number | null;
+  viewCount: number;
+  publishedAt?: string | null;
+  createdAt: string;
+  category: string;
+  visibility: "PUBLIC" | "PRIVATE" | "UNLISTED";
+  status: "UPLOADING" | "PROCESSING" | "READY" | "FAILED" | "SCHEDULED";
+};
+
+export async function fetchMyManageVideos() {
+  const res = await fetch(`${API_BASE}/users/me/videos`);
+  if (!res.ok) throw new Error("Failed to fetch creator videos");
+  const data = await res.json() as { items: ApiVideo[] };
+  return data.items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    thumbnailUrl: item.thumbnailUrl,
+    duration: item.duration,
+    viewCount: item.viewCount,
+    publishedAt: item.publishedAt,
+    createdAt: item.createdAt,
+    category: item.category,
+    visibility: item.visibility || "PUBLIC",
+    status: item.status || "READY"
+  } satisfies ManageVideoItem));
+}
+
+export async function fetchManageVideo(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/manage`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to fetch video" }));
+    throw new Error(data.error || "Failed to fetch video");
+  }
+
+  const data = await res.json() as {
+    item: {
+      id: string;
+      title: string;
+      description?: string | null;
+      tags: string[];
+      category: string;
+      visibility: "PUBLIC" | "PRIVATE" | "UNLISTED";
+      thumbnailUrl?: string | null;
+      hlsBaseUrl?: string | null;
+    };
+  };
+
+  return data.item;
+}
+
+export async function uploadVideoThumbnail(videoId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/videos/${videoId}/thumbnail`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to upload thumbnail" }));
+    throw new Error(data.error || "Failed to upload thumbnail");
+  }
+
+  return res.json() as Promise<{ item: { thumbnailUrl?: string | null } }>;
+}
+
+export async function updateVideo(videoId: string, payload: { title?: string; description?: string; tags?: string[]; visibility?: "PUBLIC" | "PRIVATE" | "UNLISTED"; category?: string; thumbnailUrl?: string }) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to update video" }));
+    throw new Error(data.error || "Failed to update video");
+  }
+}
+
+export async function retryVideoUpload(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/retry-upload`, { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to retry upload" }));
+    throw new Error(data.error || "Failed to retry upload");
+  }
+
+  return res.json() as Promise<{ ok: boolean; item: ManageVideoItem; message?: string }>;
+}
+
+export async function deleteVideo(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to delete video" }));
+    throw new Error(data.error || "Failed to delete video");
+  }
+}
+
+export async function uploadVideoFile(formData: FormData, onProgress?: (percent: number) => void) {
+  return new Promise<{ item: ApiVideo }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/videos/upload-file`);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || !onProgress) return;
+      const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      onProgress(percent);
+    };
+
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(json as { item: ApiVideo });
+        } else {
+          reject(new Error(json.error || "Upload failed"));
+        }
+      } catch {
+        reject(new Error("Upload failed"));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(formData);
+  });
+}
+
+export async function fetchDownloadUrl(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/download-url`);
+  if (!res.ok) throw new Error("Failed to get download url");
+  const data = await res.json() as { url: string };
+  return data.url;
+}
+
+export async function fetchLiveStreams() {
+  const res = await fetch(`${API_BASE}/streams`);
+  if (!res.ok) throw new Error("Failed to fetch streams");
+  const data = await res.json() as { items: ApiLivestream[] };
+  return data.items;
+}
+
+export async function fetchAllStreams() {
+  const res = await fetch(`${API_BASE}/streams/all`);
+  if (!res.ok) throw new Error("Failed to fetch streams");
+  const data = await res.json() as { items: ApiLivestream[] };
+  return data.items;
+}
+
+export async function fetchMyStreams() {
+  const res = await fetch(`${API_BASE}/streams/me`);
+  if (!res.ok) throw new Error("Failed to fetch your streams");
+  const data = await res.json() as { items: ApiLivestream[] };
+  return data.items;
+}
+
+export async function createStream(payload: { title: string; description?: string }) {
+  const res = await fetch(`${API_BASE}/streams`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to create stream" }));
+    throw new Error(data.error || "Failed to create stream");
+  }
+  const data = await res.json() as { item: ApiLivestream };
+  return data.item;
+}
+
+export async function updateStreamStatus(streamId: string, status: "LIVE" | "OFFLINE" | "ENDED") {
+  const res = await fetch(`${API_BASE}/streams/${streamId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Failed to update stream status" }));
+    throw new Error(data.error || "Failed to update stream status");
+  }
+  const data = await res.json() as { item: ApiLivestream };
+  return data.item;
+}

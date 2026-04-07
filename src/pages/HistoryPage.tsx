@@ -1,0 +1,71 @@
+import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { fetchHistoryVideos, mapApiVideoToVideoData } from "@/lib/api";
+import { formatViewCount, formatDuration, formatRelativeTime, type VideoData } from "@/lib/mockData";
+
+type HistoryItem = {
+  video: VideoData;
+  watchedAt: string;
+  watchPercent: number;
+};
+
+export default function HistoryPage() {
+  const [items, setItems] = useState<HistoryItem[]>([]);
+
+  useEffect(() => {
+    fetchHistoryVideos()
+      .then((rows) => setItems(rows.map((row) => ({ video: mapApiVideoToVideoData(row.video), watchedAt: row.watchedAt, watchPercent: row.watchPercent }))))
+      .catch(() => setItems([]));
+  }, []);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, HistoryItem[]>();
+    for (const item of items) {
+      const day = new Date(item.watchedAt).toLocaleDateString();
+      if (!map.has(day)) map.set(day, []);
+      map.get(day)!.push(item);
+    }
+    return Array.from(map.entries()).map(([label, videos]) => ({ label, videos }));
+  }, [items]);
+
+  return (
+    <div className="p-4 lg:p-6 max-w-4xl">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">Watch History</h1>
+      </div>
+
+      {grouped.length === 0 && <p className="text-sm text-muted-foreground">No watch history yet.</p>}
+
+      <div className="space-y-8">
+        {grouped.map(({ label, videos }) => (
+          <div key={label}>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">{label}</h3>
+            <div className="space-y-3">
+              {videos.map((entry) => {
+                const v = entry.video;
+                return (
+                  <Link key={`${label}-${v.id}-${entry.watchedAt}`} to={`/watch/${v.id}`} className="flex gap-4 group">
+                    <div className="relative w-44 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0">
+                      <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
+                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground">
+                        {formatDuration(v.duration)}
+                      </span>
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-border">
+                        <div className="h-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, entry.watchPercent * 100))}%` }} />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <h4 className="text-sm font-medium text-foreground line-clamp-2 group-hover:underline">{v.title}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">{v.channel.displayName}</p>
+                      <p className="text-xs text-muted-foreground">{formatViewCount(v.viewCount)} views · {formatRelativeTime(v.publishedAt)}</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

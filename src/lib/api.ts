@@ -80,6 +80,52 @@ export function isClipLikeVideo(video: VideoData): boolean {
   return isAutoClipVideo(video) || Boolean(video.duration > 0 && video.duration <= 60);
 }
 
+const orientationCache = new Map<string, boolean>();
+
+async function detectPortraitFromThumbnail(video: VideoData): Promise<boolean> {
+  const key = video.id || video.thumbnailUrl;
+  if (orientationCache.has(key)) {
+    return orientationCache.get(key)!;
+  }
+
+  const isPortrait = await new Promise<boolean>((resolve) => {
+    const image = new Image();
+    image.loading = "eager";
+    image.referrerPolicy = "no-referrer";
+    image.onload = () => resolve(image.naturalHeight > image.naturalWidth);
+    image.onerror = () => resolve(false);
+    image.src = video.thumbnailUrl;
+  });
+
+  orientationCache.set(key, isPortrait);
+  return isPortrait;
+}
+
+function hasClipTag(video: VideoData): boolean {
+  const tags = video.tags.map((tag) => tag.toLowerCase());
+  return tags.includes(AUTO_CLIP_TAG.toLowerCase()) || tags.includes("__portrait__") || tags.includes("portrait") || tags.includes("short") || tags.includes("shorts") || tags.includes("clip") || tags.includes("clips");
+}
+
+export async function partitionVideosByFormat(videos: VideoData[]) {
+  const clips: VideoData[] = [];
+  const regularVideos: VideoData[] = [];
+
+  for (const video of videos) {
+    let isClip = hasClipTag(video);
+    if (!isClip) {
+      isClip = await detectPortraitFromThumbnail(video);
+    }
+
+    if (isClip) {
+      clips.push(video);
+    } else {
+      regularVideos.push(video);
+    }
+  }
+
+  return { clips, regularVideos };
+}
+
 export async function fetchVideos(params?: { category?: string; sort?: "latest" | "views"; page?: number; limit?: number }) {
   const query = new URLSearchParams();
   if (params?.category && params.category !== "All") query.set("category", params.category.toUpperCase());
@@ -91,6 +137,36 @@ export async function fetchVideos(params?: { category?: string; sort?: "latest" 
   if (!res.ok) throw new Error("Failed to fetch videos");
   const data = await res.json() as { items: ApiVideo[] };
   return data.items.map(mapApiVideoToVideoData);
+}
+
+export async function fetchAllVideos(params?: { category?: string; sort?: "latest" | "views"; limitPerPage?: number; maxPages?: number }) {
+  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 50, 1), 50);
+  const maxPages = Math.max(params?.maxPages ?? 20, 1);
+  const all: VideoData[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const items = await fetchVideos({
+      category: params?.category,
+      sort: params?.sort,
+      page,
+      limit: limitPerPage
+    });
+
+    let added = 0;
+    for (const item of items) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      all.push(item);
+      added += 1;
+    }
+
+    if (items.length < limitPerPage || added === 0) {
+      break;
+    }
+  }
+
+  return all;
 }
 
 export async function fetchTrendingVideos() {

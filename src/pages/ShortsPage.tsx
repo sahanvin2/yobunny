@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, Heart, MessageCircle, Bookmark } from "lucide-react";
-import { addComment, fetchVideoComments, fetchVideos, isClipLikeVideo, toggleLike, toggleSave } from "@/lib/api";
+import { addComment, fetchAllVideos, fetchVideoComments, partitionVideosByFormat, toggleLike, toggleSave } from "@/lib/api";
 import type { VideoData, CommentData } from "@/lib/mockData";
 import { formatRelativeTime } from "@/lib/mockData";
 import { isAuthenticated } from "@/lib/auth";
@@ -20,9 +20,9 @@ export default function ShortsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    void fetchVideos({ sort: "latest", page: 1, limit: 50 })
-      .then((items) => {
-        const shortItems = items.filter(isClipLikeVideo);
+    void fetchAllVideos({ sort: "latest" })
+      .then(async (items) => {
+        const { clips: shortItems } = await partitionVideosByFormat(items);
         setClips(shortItems);
         if (!id) return;
         const idx = shortItems.findIndex((item) => item.id === id);

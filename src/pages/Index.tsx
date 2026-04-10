@@ -8,6 +8,56 @@ import { fetchVideos, isClipLikeVideo, partitionVideosByFormat } from "@/lib/api
 const PAGE_SIZE = 40;
 const TOP_LANDSCAPE_COUNT = 15;
 
+function shuffleInPlace<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
+  }
+  return arr;
+}
+
+function mixByCreator(videos: VideoData[]) {
+  const groups = new Map<string, VideoData[]>();
+
+  for (const video of videos) {
+    const key = video.channel?.username || "unknown";
+    const list = groups.get(key) || [];
+    list.push(video);
+    groups.set(key, list);
+  }
+
+  for (const list of groups.values()) {
+    shuffleInPlace(list);
+  }
+
+  const creatorKeys = shuffleInPlace(Array.from(groups.keys()));
+  const mixed: VideoData[] = [];
+
+  while (creatorKeys.length > 0) {
+    for (let i = creatorKeys.length - 1; i >= 0; i -= 1) {
+      const key = creatorKeys[i];
+      const bucket = groups.get(key);
+      if (!bucket || bucket.length === 0) {
+        creatorKeys.splice(i, 1);
+        continue;
+      }
+
+      const item = bucket.shift();
+      if (item) {
+        mixed.push(item);
+      }
+
+      if (bucket.length === 0) {
+        creatorKeys.splice(i, 1);
+      }
+    }
+  }
+
+  return mixed;
+}
+
 function hasClipTag(video: VideoData) {
   const tags = (video.tags || []).map((tag) => String(tag).toLowerCase());
   return tags.includes("__auto_clip__") || tags.includes("__portrait__") || tags.includes("portrait") || tags.includes("short") || tags.includes("shorts") || tags.includes("clip") || tags.includes("clips");
@@ -29,6 +79,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const pageSentinelRef = useRef<HTMLDivElement | null>(null);
   const loadMoreLockRef = useRef(false);
+  const [mixSeed, setMixSeed] = useState(() => Date.now());
 
   const loadPage = useCallback(
     async (targetPage: number, replace = false) => {
@@ -77,6 +128,7 @@ export default function HomePage() {
     setPage(1);
     setHasMorePages(true);
     setError("");
+    setMixSeed(Date.now());
     void loadPage(1, true);
   }, [category, loadPage]);
 
@@ -160,8 +212,13 @@ export default function HomePage() {
     () => allVideos.filter((video) => !clipIds.has(video.id) && !isClipCandidate(video)),
     [allVideos, clipIds]
   );
-  const topLandscapeVideos = videos.slice(0, TOP_LANDSCAPE_COUNT);
-  const bottomLandscapeVideos = videos.slice(TOP_LANDSCAPE_COUNT);
+  const mixedLandscapeVideos = useMemo(() => {
+    // mixSeed is used to re-shuffle when category changes or page is refreshed.
+    void mixSeed;
+    return mixByCreator(videos);
+  }, [videos, mixSeed]);
+  const topLandscapeVideos = mixedLandscapeVideos.slice(0, TOP_LANDSCAPE_COUNT);
+  const bottomLandscapeVideos = mixedLandscapeVideos.slice(TOP_LANDSCAPE_COUNT);
 
   return (
     <div className="p-4 lg:p-6 space-y-6">

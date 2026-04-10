@@ -140,8 +140,8 @@ export async function fetchVideos(params?: { category?: string; sort?: "latest" 
 }
 
 export async function fetchAllVideos(params?: { category?: string; sort?: "latest" | "views"; limitPerPage?: number; maxPages?: number }) {
-  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 50, 1), 50);
-  const maxPages = Math.max(params?.maxPages ?? 20, 1);
+  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 200, 1), 200);
+  const maxPages = Math.max(params?.maxPages ?? 200, 1);
   const all: VideoData[] = [];
   const seen = new Set<string>();
 
@@ -420,10 +420,18 @@ export async function deleteVideo(videoId: string) {
   }
 }
 
-export async function uploadVideoFile(formData: FormData, onProgress?: (percent: number) => void) {
+export async function uploadVideoFile(
+  formData: FormData,
+  onProgress?: (percent: number) => void,
+  options?: { uploadSessionId?: string }
+) {
   return new Promise<{ item: ApiVideo }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/videos/upload-file`);
+
+    if (options?.uploadSessionId) {
+      xhr.setRequestHeader("X-Upload-Session-Id", options.uploadSessionId);
+    }
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || !onProgress) return;

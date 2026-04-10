@@ -54,6 +54,7 @@ export default function SettingsPage() {
       const nextBannerUrl = item.bannerUrl || "";
       setAvatarUrl(nextAvatarUrl ? `${nextAvatarUrl}${nextAvatarUrl.includes("?") ? "&" : "?"}v=${Date.now()}` : "");
       setBannerUrl(nextBannerUrl ? `${nextBannerUrl}${nextBannerUrl.includes("?") ? "&" : "?"}v=${Date.now()}` : "");
+      window.dispatchEvent(new CustomEvent("yobunny:user-profile-updated"));
       setStatus(kind === "avatar" ? "Avatar updated" : "Banner updated");
       window.setTimeout(() => setStatus(""), 1200);
     } catch (err) {
@@ -68,6 +69,7 @@ export default function SettingsPage() {
     try {
       setStatus("Saving...");
       await updateMe({ displayName, username, bio });
+      window.dispatchEvent(new CustomEvent("yobunny:user-profile-updated"));
       setStatus("Saved successfully");
       window.setTimeout(() => setStatus(""), 1200);
     } catch (err) {

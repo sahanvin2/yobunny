@@ -16,7 +16,10 @@ export default function DashboardPage() {
   const [timeFilter, setTimeFilter] = useState<'1h' | '1d' | '7d' | '1m' | '1y'>('1m');
   const [trendData, setTrendData] = useState<{ name: string; views: number }[]>([]);
 
-  const chartData = videos.map(v => ({
+  const filteredVideos = videos;
+  const effectiveStats = stats;
+
+  const chartData = filteredVideos.map(v => ({
     name: v.title.length > 15 ? v.title.substring(0, 15) + "..." : v.title,
     fullTitle: v.title,
     views: v.viewCount
@@ -30,7 +33,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (videos.length === 0) return;
+    if (filteredVideos.length === 0) return;
 
     const now = Date.now();
     let cutoff = 0;
@@ -40,10 +43,10 @@ export default function DashboardPage() {
     else if (timeFilter === '1m') cutoff = now - 30 * 24 * 60 * 60 * 1000;
     else if (timeFilter === '1y') cutoff = now - 365 * 24 * 60 * 60 * 1000;
 
-    const olderVideos = videos.filter(v => new Date(v.publishedAt).getTime() < cutoff);
+    const olderVideos = filteredVideos.filter(v => new Date(v.publishedAt).getTime() < cutoff);
     let cumulative = olderVideos.reduce((acc, v) => acc + v.viewCount, 0);
 
-    const recentVideos = videos.filter(v => new Date(v.publishedAt).getTime() >= cutoff)
+    const recentVideos = filteredVideos.filter(v => new Date(v.publishedAt).getTime() >= cutoff)
       .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime());
 
     const data = [];
@@ -63,7 +66,7 @@ export default function DashboardPage() {
       data.push({ name: 'Now', views: cumulative, fullTitle: 'Current Total' });
     }
     setTrendData(data);
-  }, [videos, timeFilter]);
+  }, [filteredVideos, timeFilter]);
 
   const removeVideo = async (videoId: string) => {
     const confirmed = window.confirm("Delete this video permanently?");
@@ -128,7 +131,7 @@ export default function DashboardPage() {
               <Eye size={20} className="text-white/80" />
             </div>
             <p className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-1">Total Views</p>
-            <p className="text-4xl font-bold text-white tracking-tight">{formatViewCount(stats.totalViews)}</p>
+            <p className="text-4xl font-bold text-white tracking-tight">{formatViewCount(effectiveStats.totalViews)}</p>
           </div>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-[2rem] p-6 border border-white/10 shadow-xl relative overflow-hidden group">
@@ -138,7 +141,7 @@ export default function DashboardPage() {
               <Users size={20} className="text-white/80" />
             </div>
             <p className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-1">Subscribers</p>
-            <p className="text-4xl font-bold text-white tracking-tight">{formatViewCount(stats.subscribers)}</p>
+            <p className="text-4xl font-bold text-white tracking-tight">{formatViewCount(effectiveStats.subscribers)}</p>
           </div>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-[2rem] p-6 border border-white/10 shadow-xl relative overflow-hidden group">
@@ -148,7 +151,7 @@ export default function DashboardPage() {
               <Film size={20} className="text-white/80" />
             </div>
             <p className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-1">Videos</p>
-            <p className="text-4xl font-bold text-white tracking-tight">{stats.videoCount}</p>
+            <p className="text-4xl font-bold text-white tracking-tight">{effectiveStats.videoCount}</p>
           </div>
         </div>
       </div>
@@ -254,7 +257,7 @@ export default function DashboardPage() {
           </div>
         )}
         <div className="divide-y divide-white/5 flex flex-col">
-          {videos.map((v) => (
+          {filteredVideos.map((v) => (
             <div key={v.id} className="flex flex-col xl:flex-row xl:items-center gap-6 px-8 py-6 hover:bg-white/[0.02] transition-colors group">
               <Link to={`/watch/${v.id}`} className="relative group/thumb w-full xl:w-48 flex-shrink-0">
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity rounded-2xl flex items-center justify-center z-10 backdrop-blur-[2px]">
@@ -302,7 +305,7 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
-          {videos.length === 0 && <div className="px-8 py-10 text-center text-sm font-medium text-white/40">No videos uploaded yet.</div>}
+          {filteredVideos.length === 0 && <div className="px-8 py-10 text-center text-sm font-medium text-white/40">No videos uploaded in this channel yet.</div>}
         </div>
       </div>
     </div>

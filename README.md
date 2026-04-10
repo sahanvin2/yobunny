@@ -92,6 +92,7 @@ npm run dev          # Development server
 npm run build        # Production build
 npm run prisma:push  # Sync database schema
 npm run prisma:studio # Database GUI
+node scripts/report-metrics.mjs # Videos, DB size, table rows/columns, B2 usage
 ```
 
 **Frontend**:

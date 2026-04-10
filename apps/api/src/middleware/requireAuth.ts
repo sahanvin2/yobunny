@@ -15,10 +15,12 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
     const uid = token.length > 0 ? token : env.DEV_AUTH_UID;
     const username = `dev_${uid.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20)}`;
+    const defaultDevEmail = `${username}@local.dev`;
+    const devEmail = uid === env.DEV_AUTH_UID ? env.DEV_AUTH_EMAIL : defaultDevEmail;
 
     request.authUser = {
       uid,
-      email: env.DEV_AUTH_EMAIL,
+      email: devEmail,
       name: "Local Dev User",
       picture: undefined
     };
@@ -26,14 +28,14 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     await request.server.prisma.user.upsert({
       where: { firebaseUid: uid },
       update: {
-        email: env.DEV_AUTH_EMAIL,
+        email: devEmail,
         displayName: "Local Dev User"
       },
       create: {
         firebaseUid: uid,
         username,
         displayName: "Local Dev User",
-        email: env.DEV_AUTH_EMAIL
+        email: devEmail
       }
     });
 

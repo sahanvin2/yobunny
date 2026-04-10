@@ -6,6 +6,11 @@
 
 @layer base {
   :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --header-h: 60px;
+    --bottom-nav-h: 68px;
+
     --background: 0 0% 4%;
     --foreground: 0 0% 100%;
 
@@ -60,6 +65,20 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
   }
 
   /* Custom scrollbar */

@@ -20,17 +20,28 @@ export default function Header() {
 
   useEffect(() => {
     if (!authenticated) return;
-    fetchMe()
-      .then((user) => {
-        setDisplayName(user.displayName || "YoBunny User");
-        setEmail(user.email || "user@yobunny.com");
+    const loadProfile = () => {
+      fetchMe()
+        .then((user) => {
+          setDisplayName(user.displayName || "YoBunny User");
+          setEmail(user.email || "user@yobunny.com");
           setAvatarUrl(user.avatarUrl || user.profileImageUrl || fallbackAvatar);
-      })
-      .catch(() => undefined);
-        }, [authenticated, fallbackAvatar]);
+        })
+        .catch(() => undefined);
+    };
+
+    loadProfile();
+    window.addEventListener("focus", loadProfile);
+    window.addEventListener("yobunny:user-profile-updated", loadProfile as EventListener);
+
+    return () => {
+      window.removeEventListener("focus", loadProfile);
+      window.removeEventListener("yobunny:user-profile-updated", loadProfile as EventListener);
+    };
+  }, [authenticated, fallbackAvatar]);
 
   return (
-    <header className="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-w,220px)] transition-[left] duration-200 h-[60px] bg-background/95 backdrop-blur-sm border-b border-border z-30 flex items-center px-4 gap-4">
+    <header className="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-w,220px)] transition-[left] duration-200 h-[calc(var(--header-h)+var(--safe-top))] bg-background/95 backdrop-blur-sm border-b border-border z-30 flex items-center px-3 sm:px-4 gap-2 sm:gap-4 pt-[var(--safe-top)]">
       <button className="hidden p-2 rounded-xl hover:bg-accent text-foreground" aria-label="Menu">
         <Menu size={20} />
       </button>
@@ -41,7 +52,7 @@ export default function Header() {
       </Link>
 
       <div className="flex-1 flex justify-center">
-        <div className="relative w-full max-w-[560px]">
+        <div className="relative w-full max-w-[560px] hidden sm:block">
           <input
             type="text"
             placeholder="Search videos..."
@@ -82,6 +93,14 @@ export default function Header() {
             </div>
           )}
         </div>
+
+        <Link
+          to={searchQuery ? `/search?q=${encodeURIComponent(searchQuery)}` : "/search"}
+          className="sm:hidden inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface border border-border text-muted-foreground"
+          aria-label="Search"
+        >
+          <Search size={18} />
+        </Link>
       </div>
 
       <div className="flex items-center gap-1">
@@ -94,7 +113,7 @@ export default function Header() {
         </ProtectedLink>
         <ProtectedLink
           to="/notifications"
-          className="p-2.5 rounded-2xl hover:bg-accent text-foreground transition-colors relative"
+          className="p-2.5 rounded-2xl hover:bg-accent text-foreground transition-colors relative min-h-11 min-w-11 inline-flex items-center justify-center"
           aria-label="Notifications"
         >
           <Bell size={20} />

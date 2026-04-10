@@ -49,6 +49,7 @@ function isAllowedOrigin(origin: string | undefined, allowedOrigins: string[]) {
 export async function buildServer() {
   const app = Fastify({ logger: true });
   const allowedOrigins = buildAllowedOrigins();
+  const rateLimitMax = env.NODE_ENV === "production" ? 100 : 2000;
 
   await app.register(cors, {
     origin: (origin, callback) => {
@@ -62,10 +63,14 @@ export async function buildServer() {
     credentials: true
   });
 
-  await app.register(helmet);
+  await app.register(helmet, {
+    // Frontend runs on a different origin in development (localhost:8080)
+    // and needs to render media files served by the API (localhost:4000).
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  });
 
   await app.register(rateLimit, {
-    max: 100,
+    max: rateLimitMax,
     timeWindow: "1 minute"
   });
 

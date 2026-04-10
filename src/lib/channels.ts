@@ -8,6 +8,8 @@ export type CreatorChannel = {
   createdAt: string;
 };
 
+export const CHANNELS_UPDATED_EVENT = "yobunny:channels-updated";
+
 function channelsStorageKey(userId: string) {
   return `yobunny.channels.${userId}`;
 }
@@ -54,6 +56,7 @@ export function loadChannels(userId: string, fallbackPrimary: CreatorChannel) {
 export function saveChannels(userId: string, channels: CreatorChannel[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(channelsStorageKey(userId), JSON.stringify(channels));
+  window.dispatchEvent(new CustomEvent(CHANNELS_UPDATED_EVENT, { detail: { userId, channels } }));
 }
 
 export function getSelectedChannelId(userId: string, channels: CreatorChannel[]) {

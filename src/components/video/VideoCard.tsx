@@ -7,13 +7,13 @@ interface VideoCardProps {
   video: VideoData;
 }
 
+const FALLBACK_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff";
+
 export default function VideoCard({ video }: VideoCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
-  const [videoDuration, setVideoDuration] = useState<number>(video.duration || 0);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -21,6 +21,8 @@ export default function VideoCard({ video }: VideoCardProps) {
   }, [video.id, video.thumbnailUrl]);
 
   useEffect(() => {
+    if (!menuOpen) return;
+
     const onDocumentClick = (event: MouseEvent) => {
       if (!menuRef.current) return;
       if (!menuRef.current.contains(event.target as Node)) {
@@ -31,24 +33,7 @@ export default function VideoCard({ video }: VideoCardProps) {
 
     document.addEventListener("click", onDocumentClick);
     return () => document.removeEventListener("click", onDocumentClick);
-  }, []);
-
-  // Extract duration from video element when it loads
-  useEffect(() => {
-    if (!video.hlsBaseUrl || videoDuration > 0) return;
-
-    const video_el = videoRef.current;
-    if (!video_el) return;
-
-    const onLoadedMetadata = () => {
-      if (video_el.duration && isFinite(video_el.duration)) {
-        setVideoDuration(video_el.duration);
-      }
-    };
-
-    video_el.addEventListener("loadedmetadata", onLoadedMetadata);
-    return () => video_el.removeEventListener("loadedmetadata", onLoadedMetadata);
-  }, [video.hlsBaseUrl, videoDuration]);
+  }, [menuOpen]);
 
   const runShare = async () => {
     const url = `${window.location.origin}/watch/${video.id}`;
@@ -79,13 +64,6 @@ export default function VideoCard({ video }: VideoCardProps) {
               Thumbnail unavailable
             </div>
           )}
-          {/* Hidden video element for metadata extraction */}
-          <video
-            ref={videoRef}
-            src={video.hlsBaseUrl || ""}
-            className="hidden"
-            preload="metadata"
-          />
           <div className="absolute inset-0 bg-background/0 group-hover:bg-background/20 transition-colors flex items-center justify-center">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="w-12 h-12 rounded-full bg-background/80 flex items-center justify-center">
@@ -95,7 +73,7 @@ export default function VideoCard({ video }: VideoCardProps) {
           </div>
           <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground flex items-center gap-1">
             <Clock size={12} />
-            {videoDuration > 0 ? formatDuration(videoDuration) : formatDuration(video.duration)}
+            {formatDuration(video.duration)}
           </span>
         </div>
       </Link>
@@ -105,7 +83,12 @@ export default function VideoCard({ video }: VideoCardProps) {
           <img
             src={video.channel.avatarUrl}
             alt={video.channel.displayName}
-            className="w-9 h-9 rounded-full bg-surface"
+            className="w-9 h-9 rounded-full bg-surface object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={(event) => {
+              event.currentTarget.src = FALLBACK_AVATAR;
+            }}
           />
         </Link>
         <Link to={`/watch/${video.id}`} className="flex-1 min-w-0 pr-6 group-hover/card:underline decoration-transparent hover:decoration-foreground">

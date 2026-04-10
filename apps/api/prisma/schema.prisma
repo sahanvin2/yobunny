@@ -62,6 +62,10 @@ model Video {
   qualities    VideoQuality[]
 
   @@index([status, publishedAt, viewCount, userId, category])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, publishedAt(sort: Desc)])
+  @@index([category, publishedAt(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
 }
 
 model VideoQuality {
@@ -73,6 +77,8 @@ model VideoQuality {
   fileKey    String
   fileSize   BigInt
   bitrate    Int
+
+  @@index([videoId, resolution])
 }
 
 model Comment {
@@ -86,6 +92,8 @@ model Comment {
   user      User     @relation(fields: [userId], references: [id])
   video     Video    @relation(fields: [videoId], references: [id])
   replies   Reply[]
+
+  @@index([videoId, createdAt(sort: Desc)])
 }
 
 model Reply {
@@ -96,6 +104,8 @@ model Reply {
   commentId String
   user      User     @relation(fields: [userId], references: [id])
   comment   Comment  @relation(fields: [commentId], references: [id])
+
+  @@index([commentId, createdAt(sort: Desc)])
 }
 
 model VideoLike {
@@ -126,6 +136,9 @@ model WatchHistory {
   watchPercent Float    @default(0)
   user         User     @relation(fields: [userId], references: [id])
   video        Video    @relation(fields: [videoId], references: [id])
+
+  @@index([userId, watchedAt(sort: Desc)])
+  @@index([videoId, watchedAt(sort: Desc)])
 }
 
 model SavedVideo {
@@ -149,6 +162,9 @@ model Notification {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
   fromUser  User?    @relation("fromUser", fields: [fromUserId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isRead, createdAt(sort: Desc)])
 }
 
 model Livestream {
@@ -165,6 +181,8 @@ model Livestream {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   comments   LiveComment[]
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model LiveComment {
@@ -173,6 +191,8 @@ model LiveComment {
   livestream  Livestream @relation(fields: [livestreamId], references: [id])
   body        String
   createdAt   DateTime @default(now())
+
+  @@index([livestreamId, createdAt(sort: Desc)])
 }
 
 enum VideoStatus {

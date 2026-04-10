@@ -25,7 +25,9 @@ import {
   MoreHorizontal,
   Plus,
   Code,
-  Copy
+  Copy,
+  RotateCcw,
+  RotateCw
 } from "lucide-react";
 import {
   formatViewCount,
@@ -66,6 +68,9 @@ const FALLBACK_VIDEO: VideoData = {
   }
 };
 
+const FALLBACK_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff";
+const FALLBACK_THUMBNAIL = "https://placehold.co/640x360/111111/ffffff?text=YoBunny";
+
 export default function WatchPage() {
   const { id } = useParams();
   const { openAuthModal } = useAuthModal();
@@ -97,12 +102,13 @@ export default function WatchPage() {
   const [pointA, setPointA] = useState<number | null>(null);
   const [pointB, setPointB] = useState<number | null>(null);
   const [abEnabled, setAbEnabled] = useState(false);
-  const [quality, setQuality] = useState("Auto");
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [openRecommendedMenuId, setOpenRecommendedMenuId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const progressInputRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
+  const wasPlayingRef = useRef(false);
 
   const likeCount = useMemo(() => Math.max(0, Math.floor(video.viewCount * 0.04) + (liked ? 1 : 0)), [video.viewCount, liked]);
   const currentPlaybackUrl = playbackCandidates[playbackIndex] || "";
@@ -125,7 +131,8 @@ export default function WatchPage() {
         setVideo(videoDetails.video);
         const candidates = [
           videoDetails.playbackUrl,
-          `${API_BASE}/videos/${id}/stream`
+          `${API_BASE}/videos/${id}/stream`,
+          `${API_BASE}/videos/${id}/playable`
         ].filter((item, index, arr): item is string => Boolean(item) && arr.indexOf(item) === index);
 
         setPlaybackCandidates(candidates);
@@ -340,11 +347,15 @@ export default function WatchPage() {
               onError={handleVideoError}
               onTimeUpdate={(e) => {
                 const el = e.currentTarget;
+                const duration = isFinite(el.duration) && el.duration > 0 ? el.duration : video.duration;
+                const progress = duration > 0 ? (el.currentTime / duration) * 100 : 0;
                 if (progressRef.current) {
-                  progressRef.current.style.width = `${(el.currentTime / Math.max(1, el.duration)) * 100}%`;
+                  progressRef.current.style.width = `${progress}%`;
+                }
+                if (progressInputRef.current && document.activeElement !== progressInputRef.current) {
+                  progressInputRef.current.value = progress.toString();
                 }
                 if (timeRef.current) {
-                  // A simple manual format instead of importing just for this block
                   const m = Math.floor(el.currentTime / 60);
                   const s = Math.floor(el.currentTime % 60);
                   timeRef.current.innerText = `${m}:${s.toString().padStart(2, "0")}`;
@@ -386,38 +397,97 @@ export default function WatchPage() {
                     ))}
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs text-white/60 mb-2 font-medium">Video Quality</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["Auto", "1080p", "720p", "480p"].map((q) => (
-                      <button key={q} onClick={() => setQuality(q)} className={`h-9 rounded-xl transition-colors font-medium ${quality === q ? 'bg-primary text-primary-foreground' : 'bg-white/10 hover:bg-white/20'}`}>{q}</button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </>
           )}
 
           <div className="absolute bottom-0 left-0 right-0 pt-16 pb-4 px-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end z-20">
-            <div 
-              className="w-full h-1.5 bg-white/30 rounded-full cursor-pointer overflow-hidden mb-3 hover:h-2 transition-all"
-              onClick={(e) => {
-                if (videoRef.current) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const val = (e.clientX - rect.left) / rect.width;
-                  videoRef.current.currentTime = val * videoRef.current.duration;
-                }
-              }}
-            >
-              <div ref={progressRef} className="h-full bg-primary w-0 pointer-events-none transition-all duration-75 ease-linear"></div>
+            <div className="relative w-full h-1.5 mb-3 group/progress hover:h-2 transition-all">
+              <div className="absolute inset-0 bg-white/30 rounded-full pointer-events-none"></div>
+              <div ref={progressRef} className="absolute inset-y-0 left-0 bg-primary rounded-full pointer-events-none transition-all duration-75 ease-linear w-0"></div>
+              <input 
+                type="range" 
+                ref={progressInputRef}
+                min="0" 
+                max="100" 
+                step="0.1"
+                defaultValue="0"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onMouseDown={() => {
+                  if (videoRef.current) {
+                     wasPlayingRef.current = !videoRef.current.paused;
+                     videoRef.current.pause();
+                  }
+                }}
+                onMouseUp={() => {
+                  if (videoRef.current && wasPlayingRef.current) {
+                     videoRef.current.play().catch(() => {});
+                  }
+                }}
+                onTouchStart={() => {
+                  if (videoRef.current) {
+                     wasPlayingRef.current = !videoRef.current.paused;
+                     videoRef.current.pause();
+                  }
+                }}
+                onTouchEnd={() => {
+                  if (videoRef.current && wasPlayingRef.current) {
+                     videoRef.current.play().catch(() => {});
+                  }
+                }}
+                onChange={(e) => {
+                  if (videoRef.current) {
+                    const val = parseFloat(e.target.value) / 100;
+                    const duration = isFinite(videoRef.current.duration) && videoRef.current.duration > 0 ? videoRef.current.duration : video.duration;
+                    if (duration > 0) {
+                      videoRef.current.currentTime = val * duration;
+                    }
+                  }
+                }}
+                onInput={(e) => {
+                  const val = parseFloat((e.target as HTMLInputElement).value) / 100;
+                  if (progressRef.current) {
+                    progressRef.current.style.width = `${val * 100}%`;
+                  }
+                  if (videoRef.current) {
+                    const duration = isFinite(videoRef.current.duration) && videoRef.current.duration > 0 ? videoRef.current.duration : video.duration;
+                    if (duration > 0) {
+                      videoRef.current.currentTime = val * duration;
+                    }
+                  }
+                }}
+              />
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
+                 <button 
+                  onClick={() => {
+                    if (videoRef.current) {
+                      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
+                    }
+                  }} 
+                  className="text-white hover:text-primary transition-colors"
+                  aria-label="Skip backward 10 seconds"
+                 >
+                   <RotateCcw size={20} />
+                 </button>
                  <button onClick={togglePlayback} className="text-white hover:text-primary transition-colors">
                    {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
                  </button>
-                 <span className="text-white text-xs font-medium tabular-nums shadow-sm">
+                 <button 
+                  onClick={() => {
+                    if (videoRef.current) {
+                      const duration = isFinite(videoRef.current.duration) && videoRef.current.duration > 0 ? videoRef.current.duration : video.duration;
+                      videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 10);
+                    }
+                  }} 
+                  className="text-white hover:text-primary transition-colors"
+                  aria-label="Skip forward 10 seconds"
+                 >
+                   <RotateCw size={20} />
+                 </button>
+                 <span className="text-white text-xs font-medium tabular-nums shadow-sm ml-2">
                    <span ref={timeRef}>0:00</span> / {formatDuration(video.duration)}
                  </span>
               </div>
@@ -446,7 +516,7 @@ export default function WatchPage() {
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <span className="text-sm text-muted-foreground">{formatViewCount(video.viewCount)} views · {formatRelativeTime(video.publishedAt)}</span>
           <div className="flex items-center gap-2 ml-auto flex-wrap justify-end mt-2 md:mt-0">
-            <button onClick={onLike} className={`relative overflow-hidden flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${liked ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover border border-border"}`}>
+            <button onClick={onLike} className={`relative overflow-hidden flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors ${liked ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover border border-border"}`}>
               <div className="relative flex items-center justify-center">
                  <ThumbsUp size={18} fill={liked ? 'currentColor' : 'none'} className={`transition-transform duration-300 ease-out ${likedAnimating ? 'scale-[1.7] -rotate-12 text-blue-300' : 'scale-100'}`} />
                  {likedAnimating && (
@@ -456,7 +526,7 @@ export default function WatchPage() {
               <span className={`transition-transform duration-300 z-10 ${likedAnimating ? 'scale-110' : 'scale-100'}`}>{formatViewCount(likeCount)}</span>
             </button>
             <div className="relative">
-              <button onClick={() => setShowShareModal((s) => !s)} className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold bg-surface hover:bg-surface-hover border border-border transition-colors">
+              <button onClick={() => setShowShareModal((s) => !s)} className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-surface hover:bg-surface-hover border border-border transition-colors">
                 <Share2 size={18} /> Share
               </button>
               {showShareModal && (
@@ -475,13 +545,13 @@ export default function WatchPage() {
                 </>
               )}
             </div>
-            <button onClick={onSave} className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${saved ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover border border-border"}`}>
+            <button onClick={onSave} className={`flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors ${saved ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover border border-border"}`}>
               <Plus size={18} /> Add
             </button>
             <div className="relative">
               <button 
                 onClick={() => setShowMoreMenu((s) => !s)} 
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold bg-surface hover:bg-surface-hover border border-border transition-colors"
+                className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-surface hover:bg-surface-hover border border-border transition-colors"
               >
                 <MoreHorizontal size={18} /> More
               </button>
@@ -506,7 +576,14 @@ export default function WatchPage() {
 
         <div className="flex items-center gap-3 mb-4 pb-4 border-b border-border">
           <Link to={`/channel/${video.channel.username}`}>
-            <img src={video.channel.avatarUrl} alt={video.channel.displayName} className="w-10 h-10 rounded-full bg-surface" />
+            <img
+              src={video.channel.avatarUrl}
+              alt={video.channel.displayName}
+              className="w-10 h-10 rounded-full bg-surface object-cover"
+              onError={(event) => {
+                event.currentTarget.src = FALLBACK_AVATAR;
+              }}
+            />
           </Link>
           <div className="flex-1">
             <Link to={`/channel/${video.channel.username}`} className="text-sm font-medium text-foreground hover:underline">
@@ -542,7 +619,14 @@ export default function WatchPage() {
           <div className="space-y-6">
             {comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
-                <img src={comment.user.avatarUrl} alt={comment.user.displayName} className="w-8 h-8 rounded-full bg-surface flex-shrink-0" />
+                <img
+                  src={comment.user.avatarUrl}
+                  alt={comment.user.displayName}
+                  className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
+                  onError={(event) => {
+                    event.currentTarget.src = FALLBACK_AVATAR;
+                  }}
+                />
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-foreground">{comment.user.displayName}</span>
@@ -561,7 +645,15 @@ export default function WatchPage() {
             {recommended.map((v) => (
               <div key={v.id} className="flex gap-3">
                 <Link to={`/watch/${v.id}`} className="relative w-40 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0">
-                  <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
+                  <img
+                    src={v.thumbnailUrl}
+                    alt={v.title}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(event) => {
+                      event.currentTarget.src = FALLBACK_THUMBNAIL;
+                    }}
+                  />
                   <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[10px] font-medium bg-background/80 text-foreground">{formatDuration(v.duration)}</span>
                 </Link>
                 <div className="flex-1 min-w-0 py-0.5">
@@ -583,7 +675,15 @@ export default function WatchPage() {
         {recommended.map((v) => (
           <div key={v.id} className="flex gap-3 group relative">
             <Link to={`/watch/${v.id}`} className="relative w-40 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0">
-              <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
+              <img
+                src={v.thumbnailUrl}
+                alt={v.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(event) => {
+                  event.currentTarget.src = FALLBACK_THUMBNAIL;
+                }}
+              />
               <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[10px] font-medium bg-background/80 text-foreground">{formatDuration(v.duration)}</span>
             </Link>
             <div className="flex-1 min-w-0 py-0.5 pr-6">

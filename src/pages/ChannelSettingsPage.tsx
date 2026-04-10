@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { fetchMe } from "@/lib/api";
+import { fetchMe, updateMe, uploadProfileMedia } from "@/lib/api";
 import { buildPrimaryChannel, loadChannels, saveChannels, type CreatorChannel } from "@/lib/channels";
 
 function toDataUrl(file: File) {
@@ -20,6 +20,7 @@ export default function ChannelSettingsPage() {
   const [channels, setChannels] = useState<CreatorChannel[]>([]);
   const [channel, setChannel] = useState<CreatorChannel | null>(null);
   const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void fetchMe()
@@ -54,9 +55,59 @@ export default function ChannelSettingsPage() {
     if (userId) saveChannels(userId, updated);
   };
 
-  const onSave = () => {
-    setStatus("Channel settings saved.");
-    window.setTimeout(() => setStatus(""), 1200);
+  const isPrimaryChannel = userId ? channel.id === `primary-${userId}` : false;
+
+  const notifyProfileUpdated = () => {
+    window.dispatchEvent(new CustomEvent("yobunny:user-profile-updated"));
+  };
+
+  const onSave = async () => {
+    if (!channel) return;
+
+    if (!isPrimaryChannel) {
+      setStatus("Channel settings saved.");
+      window.setTimeout(() => setStatus(""), 1200);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setStatus("Saving channel settings...");
+      await updateMe({
+        displayName: channel.name,
+        username: channel.handle,
+        bio: channel.bio
+      });
+      notifyProfileUpdated();
+      setStatus("Channel settings saved.");
+      window.setTimeout(() => setStatus(""), 1200);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to save channel settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onUploadPrimaryMedia = async (kind: "avatar" | "banner", file: File) => {
+    if (!channel) return;
+    try {
+      setSaving(true);
+      setStatus(kind === "avatar" ? "Uploading avatar..." : "Uploading banner...");
+      const { item } = await uploadProfileMedia(kind, file);
+      const nextAvatarUrl = item.avatarUrl || item.profileImageUrl || "";
+      const nextBannerUrl = item.bannerUrl || "";
+      updateChannel({
+        avatarUrl: nextAvatarUrl || undefined,
+        bannerUrl: nextBannerUrl || undefined
+      });
+      notifyProfileUpdated();
+      setStatus(kind === "avatar" ? "Avatar updated." : "Banner updated.");
+      window.setTimeout(() => setStatus(""), 1200);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to upload image");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -80,10 +131,14 @@ export default function ChannelSettingsPage() {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                void toDataUrl(file).then((bannerUrl) => updateChannel({ bannerUrl }));
+                if (isPrimaryChannel) {
+                  await onUploadPrimaryMedia("banner", file);
+                } else {
+                  void toDataUrl(file).then((bannerUrl) => updateChannel({ bannerUrl }));
+                }
                 e.currentTarget.value = "";
               }}
             />
@@ -103,10 +158,14 @@ export default function ChannelSettingsPage() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  void toDataUrl(file).then((avatarUrl) => updateChannel({ avatarUrl }));
+                  if (isPrimaryChannel) {
+                    await onUploadPrimaryMedia("avatar", file);
+                  } else {
+                    void toDataUrl(file).then((avatarUrl) => updateChannel({ avatarUrl }));
+                  }
                   e.currentTarget.value = "";
                 }}
               />
@@ -142,8 +201,8 @@ export default function ChannelSettingsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button type="button" onClick={onSave} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium">
-              Save channel settings
+            <button type="button" disabled={saving} onClick={() => void onSave()} className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-60">
+              {saving ? "Saving..." : "Save channel settings"}
             </button>
             {status && <p className="text-xs text-muted-foreground">{status}</p>}
           </div>

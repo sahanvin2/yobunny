@@ -1,5 +1,5 @@
 import { Upload, Film, AlertCircle, CheckCircle, Clock } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CATEGORIES } from "@/lib/mockData";
 import { fetchMe, uploadVideoFile } from "@/lib/api";
@@ -135,6 +135,8 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadedId, setUploadedId] = useState("");
+  const [uploadSessionId, setUploadSessionId] = useState("");
+  const uploadLockRef = useRef(false);
 
   const resetThumbnailCandidates = () => {
     setThumbnailCandidates([]);
@@ -203,6 +205,10 @@ export default function UploadPage() {
     setError("");
     setProgress(0);
     setUploadedId("");
+    const generatedSessionId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `upload-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    setUploadSessionId(generatedSessionId);
     void generateVideoThumbnails(next);
   };
 
@@ -240,14 +246,20 @@ export default function UploadPage() {
   const toCategoryEnum = (value: string) => value.toUpperCase().replace(/\s+/g, "_");
 
   const onPublish = async () => {
-    if (!file) return;
+    if (!file || uploadLockRef.current || uploading) return;
 
     if (!title.trim()) {
       setError("Title is required.");
       return;
     }
 
+    if (!selectedChannelId) {
+      setError("Please select a channel before uploading.");
+      return;
+    }
+
     try {
+      uploadLockRef.current = true;
       setUploading(true);
       setError("");
       setStatus("Uploading video...");
@@ -260,26 +272,26 @@ export default function UploadPage() {
       formData.append("category", toCategoryEnum(category));
       formData.append("visibility", visibility);
       formData.append("description", description.trim());
-      formData.append("tags", tags);
+      const formattedTags = tags.split(",").map(t => t.trim()).filter(Boolean);
       if (selectedChannelId) {
         formData.append("creatorChannelId", selectedChannelId);
+        formattedTags.push(`__CHANNEL__:${selectedChannelId}`);
       }
+      formData.append("tags", formattedTags.join(","));
       if (videoMeta) {
         formData.append("videoDuration", String(Math.round(videoMeta.duration || 0)));
         formData.append("videoWidth", String(videoMeta.width || 0));
         formData.append("videoHeight", String(videoMeta.height || 0));
       }
-
-      let result: Awaited<ReturnType<typeof uploadVideoFile>>;
-      try {
-        result = await uploadVideoFile(formData, (percent) => setProgress(percent));
-      } catch (firstError) {
-        setStatus("Upload interrupted. Retrying once...");
-        result = await uploadVideoFile(formData, (percent) => setProgress(percent));
-        if (firstError) {
-          // Intentional no-op: keep variable referenced to preserve first attempt context.
-        }
+      if (uploadSessionId) {
+        formData.append("uploadSessionId", uploadSessionId);
       }
+
+      const result = await uploadVideoFile(
+        formData,
+        (percent) => setProgress(percent),
+        { uploadSessionId }
+      );
       setProgress(100);
       setStatus("✓ Uploaded successfully. Your video is now live!");
       setUploadedId(result.item.id);
@@ -290,6 +302,7 @@ export default function UploadPage() {
       setError(err instanceof Error ? err.message : "Upload failed");
       setStatus("");
     } finally {
+      uploadLockRef.current = false;
       setUploading(false);
     }
   };
@@ -433,7 +446,14 @@ export default function UploadPage() {
         <div className="bg-white/5 backdrop-blur-md rounded-3xl p-5 border border-white/10 shadow-xl relative group">
           <p className="text-sm text-white/60 mb-4 font-semibold uppercase tracking-wider">Thumbnail</p>
           {thumbnailPreviewUrl ? (
-            <img src={thumbnailPreviewUrl} alt="Thumbnail preview" className="w-full aspect-video rounded-xl object-cover bg-background mb-3" />
+            <img
+              src={thumbnailPreviewUrl}
+              alt="Thumbnail preview"
+              className="w-full aspect-video rounded-xl object-cover bg-background mb-3"
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
           ) : (
             <div className="w-full aspect-video rounded-xl bg-background border border-border mb-3 flex items-center justify-center text-xs text-muted-foreground">
               No thumbnail selected
@@ -454,7 +474,14 @@ export default function UploadPage() {
                     }}
                     className={`rounded-lg overflow-hidden border ${selectedThumbnailIndex === index ? "border-primary" : "border-border"}`}
                   >
-                    <img src={previewUrl} alt={`Generated thumbnail ${index + 1}`} className="w-full aspect-video object-cover" />
+                    <img
+                      src={previewUrl}
+                      alt={`Generated thumbnail ${index + 1}`}
+                      className="w-full aspect-video object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.opacity = "0.4";
+                      }}
+                    />
                   </button>
                 ))}
               </div>
@@ -573,7 +600,7 @@ export default function UploadPage() {
 
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-end mt-8 pt-6 border-t border-white/10">
           <button
-            disabled={uploading}
+            disabled={uploading || !selectedChannelId}
             onClick={onPublish}
             className="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black text-base font-bold hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 shadow-[0_0_30px_rgba(255,255,255,0.2)]"
           >

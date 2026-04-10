@@ -37,6 +37,7 @@ const CATEGORY_VALUES = [
 
 const VISIBILITY_VALUES = ["PUBLIC", "PRIVATE", "UNLISTED"] as const;
 const AUTO_CLIP_TAG = "__AUTO_CLIP__";
+const UPLOAD_SESSION_TAG_PREFIX = "__UPLOAD_SESSION__:";
 const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 const TRANSCODED_KEY_PREFIX = "local/transcoded";
 const transcodeLocks = new Map<string, Promise<void>>();
@@ -173,7 +174,7 @@ async function downloadToFile(url: string, filePath: string) {
 
 const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  limit: z.coerce.number().int().min(1).max(200).default(40),
   category: z.enum(CATEGORY_VALUES).optional(),
   sort: z.enum(["latest", "views"]).default("latest")
 });
@@ -181,7 +182,8 @@ const paginationSchema = z.object({
 const uploadUrlSchema = z.object({
   title: z.string().min(1).max(150),
   category: z.enum(CATEGORY_VALUES),
-  fileExt: z.string().min(2).max(10).default("mp4")
+  fileExt: z.string().min(2).max(10).default("mp4"),
+  creatorChannelId: z.string().min(2).max(120)
 });
 
 const updateVideoSchema = z.object({
@@ -325,13 +327,18 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
+    const creatorChannelId = parsed.data.creatorChannelId.trim();
+    if (!creatorChannelId) {
+      return reply.code(400).send({ error: "Please choose a channel before uploading", code: "CHANNEL_REQUIRED" });
+    }
+
     const video = await fastify.prisma.video.create({
       data: {
         title: parsed.data.title,
         rawFileKey: "pending",
         status: "UPLOADING",
         category: parsed.data.category,
-        tags: [],
+        tags: [`__CHANNEL__:${creatorChannelId}`],
         userId: dbUser.id
       }
     });
@@ -411,6 +418,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const description = String(fields.description || "").trim() || undefined;
     const tagsRaw = String(fields.tags || "");
     const creatorChannelId = String(fields.creatorChannelId || "").trim();
+    const uploadSessionId = String(request.headers["x-upload-session-id"] ?? fields.uploadSessionId ?? "").trim();
     const videoWidth = Number.parseInt(String(fields.videoWidth || "0"), 10) || 0;
     const videoHeight = Number.parseInt(String(fields.videoHeight || "0"), 10) || 0;
     const clientDuration = Number.parseInt(String(fields.videoDuration || "0"), 10) || 0;
@@ -422,6 +430,34 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: "Invalid upload metadata", code: "VALIDATION_ERROR" });
     }
 
+    if (!creatorChannelId) {
+      return reply.code(400).send({ error: "Please choose a channel before uploading", code: "CHANNEL_REQUIRED" });
+    }
+
+    if (!/^[a-zA-Z0-9_-]{2,120}$/.test(creatorChannelId)) {
+      return reply.code(400).send({ error: "Invalid channel selection", code: "VALIDATION_ERROR" });
+    }
+
+    if (uploadSessionId && !/^[a-zA-Z0-9_-]{8,120}$/.test(uploadSessionId)) {
+      return reply.code(400).send({ error: "Invalid upload session id", code: "VALIDATION_ERROR" });
+    }
+
+    const uploadSessionTag = uploadSessionId ? `${UPLOAD_SESSION_TAG_PREFIX}${uploadSessionId}` : "";
+    if (uploadSessionTag) {
+      const existing = await fastify.prisma.video.findFirst({
+        where: {
+          userId: dbUser.id,
+          tags: { has: uploadSessionTag }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (existing && existing.status !== "FAILED") {
+        fastify.log.info({ videoId: existing.id, uploadSessionId }, "Duplicate upload request detected, returning existing video");
+        return { item: existing };
+      }
+    }
+
     const ext = (videoUpload.filename.split(".").pop() || "mp4").toLowerCase();
     let videoId = "";
 
@@ -431,13 +467,15 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       const parsedTags = tagsRaw
         .split(",")
         .map((tag) => tag.trim())
+        .filter((tag) => !tag.startsWith("__UPLOAD_SESSION__:"))
         .filter(Boolean)
         .slice(0, 30);
 
       const channelTag = creatorChannelId ? `__CHANNEL__:${creatorChannelId}` : "";
-      const tagsWithChannel = channelTag && !parsedTags.includes(channelTag)
-        ? [channelTag, ...parsedTags]
-        : parsedTags;
+      const tagsWithChannel = channelTag && !parsedTags.includes(channelTag) ? [channelTag, ...parsedTags] : parsedTags;
+      const tagsWithSession = uploadSessionTag && !tagsWithChannel.includes(uploadSessionTag)
+        ? [uploadSessionTag, ...tagsWithChannel]
+        : tagsWithChannel;
 
       const video = await fastify.prisma.video.create({
         data: {
@@ -447,7 +485,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
           status: "UPLOADING",
           category: category.data,
           visibility: visibility.data,
-          tags: parsedTags,
+          tags: tagsWithSession,
           userId: dbUser.id
         }
       });
@@ -466,9 +504,9 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       const effectiveDuration = videoDuration > 0 ? videoDuration : clientDuration;
       const isPortrait = videoWidth > 0 && videoHeight > 0 && videoHeight > videoWidth;
       const shouldAutoClip = effectiveDuration > 0 && effectiveDuration <= 60 && isPortrait;
-      const finalTags = shouldAutoClip && !tagsWithChannel.includes(AUTO_CLIP_TAG)
-        ? [...tagsWithChannel, AUTO_CLIP_TAG]
-        : tagsWithChannel;
+      const finalTags = shouldAutoClip && !tagsWithSession.includes(AUTO_CLIP_TAG)
+        ? [...tagsWithSession, AUTO_CLIP_TAG]
+        : tagsWithSession;
       fastify.log.info({ videoDuration: effectiveDuration, isPortrait, shouldAutoClip }, "Video metadata extracted");
 
       // Upload to B2
@@ -601,6 +639,51 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
     const signedSourceUrl = await createDownloadUrl(rawKey, 900);
     return reply.redirect(signedSourceUrl);
+  });
+
+  fastify.get("/:id/playable", async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const video = await fastify.prisma.video.findUnique({ where: { id } });
+
+    if (!video) {
+      return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
+    }
+
+    const transcodedKey = `${TRANSCODED_KEY_PREFIX}/${video.id}.mp4`;
+
+    try {
+      await withTranscodeLock(transcodedKey, async () => {
+        if (await hasLocalObject(transcodedKey)) {
+          return;
+        }
+
+        const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `yobunny-playable-${video.id}-`));
+        const inputPath = path.join(tempDir, `input-${video.id}`);
+        const outputPath = path.join(tempDir, `output-${video.id}.mp4`);
+
+        try {
+          if (await hasLocalObject(video.rawFileKey)) {
+            await fs.copyFile(resolveLocalObjectPath(video.rawFileKey), inputPath);
+          } else {
+            const signedSourceUrl = await createDownloadUrl(video.rawFileKey, 1800);
+            await downloadToFile(signedSourceUrl, inputPath);
+          }
+
+          await transcodeToMp4(inputPath, outputPath);
+          const transcodedBuffer = await fs.readFile(outputPath);
+          await writeLocalObject(transcodedKey, transcodedBuffer);
+        } finally {
+          await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+      });
+    } catch (error) {
+      fastify.log.warn({ error: String(error), videoId: video.id }, "Playable transcode failed");
+      return reply.code(415).send({ error: "Video format is not playable yet", code: "UNSUPPORTED_MEDIA" });
+    }
+
+    reply.header("Content-Type", "video/mp4");
+    reply.header("Cache-Control", "public, max-age=86400");
+    return reply.send(createReadStream(resolveLocalObjectPath(transcodedKey)));
   });
 
   fastify.get("/:id/thumbnail", async (request, reply) => {

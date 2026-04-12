@@ -1,6 +1,9 @@
 import type { VideoData, CommentData } from "@/lib/mockData";
 
-const rawApiBase = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "/api";
+// Use relative /api path in development to use Vite proxy, or fallback to env URL in production
+const rawApiBase = typeof window !== "undefined" && !window.location.hostname.includes("localhost")
+  ? (import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "/api")
+  : "/api";
 export const API_BASE = rawApiBase.replace(/\/$/, "");
 export const AUTO_CLIP_TAG = "__AUTO_CLIP__";
 

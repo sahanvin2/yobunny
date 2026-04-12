@@ -119,7 +119,7 @@ async function createThumbnailFromVideoBuffer(videoBuffer: Buffer) {
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "yobunny-thumb-"));
   const inputPath = path.join(tempDir, "input-video");
-  const outputPath = path.join(tempDir, "thumb.jpg");
+  const outputPath = path.join(tempDir, "thumb.webp");
 
   try {
     await fs.writeFile(inputPath, videoBuffer);
@@ -134,9 +134,11 @@ async function createThumbnailFromVideoBuffer(videoBuffer: Buffer) {
         "-frames:v",
         "1",
         "-vf",
-        "scale='min(1280,iw)':-2",
+        "scale='min(960,iw)':-2",
+        "-c:v",
+        "libwebp",
         "-q:v",
-        "3",
+        "68",
         outputPath
       ]);
 
@@ -152,6 +154,54 @@ async function createThumbnailFromVideoBuffer(videoBuffer: Buffer) {
           return;
         }
         reject(new Error(`FFmpeg thumbnail generation failed (${code}): ${stderr.slice(-300)}`));
+      });
+    });
+
+    return await fs.readFile(outputPath);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function compressImageToWebp(imageBuffer: Buffer) {
+  const ffmpegBinary = ffmpegPath as unknown as string | null;
+  if (!ffmpegBinary) {
+    return null;
+  }
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "yobunny-img-webp-"));
+  const inputPath = path.join(tempDir, "input-image");
+  const outputPath = path.join(tempDir, "thumb.webp");
+
+  try {
+    await fs.writeFile(inputPath, imageBuffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn(ffmpegBinary, [
+        "-y",
+        "-i",
+        inputPath,
+        "-vf",
+        "scale='min(960,iw)':-2",
+        "-c:v",
+        "libwebp",
+        "-q:v",
+        "68",
+        outputPath
+      ]);
+
+      let stderr = "";
+      ffmpeg.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+
+      ffmpeg.on("error", reject);
+      ffmpeg.on("close", (code: number | null) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`FFmpeg image conversion failed (${code}): ${stderr.slice(-300)}`));
       });
     });
 
@@ -528,16 +578,18 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       let thumbnailUrl: string | undefined;
       if (thumbnailUpload) {
         try {
-          const thumbExt = (thumbnailUpload.filename.split(".").pop() || "jpg").toLowerCase();
+          const webpBuffer = await compressImageToWebp(thumbnailUpload.buffer).catch(() => null);
+          const thumbExt = webpBuffer ? "webp" : (thumbnailUpload.filename.split(".").pop() || "jpg").toLowerCase();
           const thumbVersion = Date.now();
           const thumbKey = `thumbnails/${video.id}/thumb-${thumbVersion}.${thumbExt}`;
-          const thumbBuffer = thumbnailUpload.buffer;
+          const thumbBuffer = webpBuffer || thumbnailUpload.buffer;
+          const thumbMime = webpBuffer ? "image/webp" : (thumbnailUpload.mimetype || "image/jpeg");
 
           fastify.log.info({ thumbKey }, "Processing thumbnail");
 
           // Try B2 thumbnail upload
           try {
-            const thumbUploaded = await uploadObjectToB2(thumbKey, thumbBuffer, thumbnailUpload.mimetype || "image/jpeg", 15000);
+            const thumbUploaded = await uploadObjectToB2(thumbKey, thumbBuffer, thumbMime, 15000);
             thumbnailUrl = thumbUploaded.publicUrl;
           } catch {
             // Fall back to local for thumbnail
@@ -694,20 +746,33 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
     }
 
-    const candidates = ["jpg", "jpeg", "png", "webp"];
+    const candidates = ["webp", "jpg", "jpeg", "png"];
     for (const ext of candidates) {
       const localThumbKey = `local/${video.userId}/${video.id}/thumb.${ext}`;
       if (await hasLocalObject(localThumbKey)) {
         const buffer = await readLocalObject(localThumbKey);
         reply.header("Content-Type", `image/${ext === "jpg" ? "jpeg" : ext}`);
-        reply.header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-        reply.header("Pragma", "no-cache");
-        reply.header("Expires", "0");
+        reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
         return reply.send(buffer);
       }
     }
 
     return reply.code(404).send({ error: "Thumbnail not found", code: "NOT_FOUND" });
+  });
+
+  fastify.get("/:id/interactions", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const dbUser = await fastify.prisma.user.findUnique({ where: { firebaseUid: request.authUser!.uid } });
+    if (!dbUser) {
+      return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
+    }
+
+    const [liked, saved] = await Promise.all([
+      fastify.prisma.videoLike.findUnique({ where: { userId_videoId: { userId: dbUser.id, videoId: id } } }),
+      fastify.prisma.savedVideo.findUnique({ where: { userId_videoId: { userId: dbUser.id, videoId: id } } })
+    ]);
+
+    return { liked: Boolean(liked), saved: Boolean(saved) };
   });
 
   fastify.post("/:id/thumbnail", { preHandler: requireAuth }, async (request, reply) => {
@@ -736,16 +801,20 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const allowedExt = new Set(["jpg", "jpeg", "png", "webp"]);
     const safeExt = allowedExt.has(ext) ? ext : "jpg";
     const contentType = safeExt === "jpg" ? "image/jpeg" : `image/${safeExt}`;
-    const buffer = await part.toBuffer();
+    const originalBuffer = await part.toBuffer();
+    const webpBuffer = await compressImageToWebp(originalBuffer).catch(() => null);
+    const buffer = webpBuffer || originalBuffer;
+    const outputExt = webpBuffer ? "webp" : safeExt;
+    const outputType = webpBuffer ? "image/webp" : contentType;
 
     let thumbnailUrl: string;
     const thumbVersion = Date.now();
-    const thumbKey = `thumbnails/${video.id}/thumb-${thumbVersion}.${safeExt}`;
+    const thumbKey = `thumbnails/${video.id}/thumb-${thumbVersion}.${outputExt}`;
     try {
-      const uploaded = await uploadObjectToB2(thumbKey, buffer, part.mimetype || contentType, 30000);
+      const uploaded = await uploadObjectToB2(thumbKey, buffer, outputType, 30000);
       thumbnailUrl = uploaded.publicUrl;
     } catch {
-      const localThumbKey = `local/${dbUser.id}/${video.id}/thumb.${safeExt}`;
+      const localThumbKey = `local/${dbUser.id}/${video.id}/thumb.${outputExt}`;
       await writeLocalObject(localThumbKey, buffer);
       thumbnailUrl = `http://localhost:4000/api/videos/${video.id}/thumbnail`;
     }
@@ -927,13 +996,37 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
-    await fastify.prisma.watchHistory.create({
-      data: {
-        userId: dbUser.id,
-        videoId: id,
-        watchPercent: percent
-      }
+    const video = await fastify.prisma.video.findUnique({ where: { id } });
+    if (!video) {
+      return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
+    }
+
+    const recent = await fastify.prisma.watchHistory.findFirst({
+      where: { userId: dbUser.id, videoId: id },
+      orderBy: { watchedAt: "desc" }
     });
+
+    const now = Date.now();
+    const recentMs = recent ? new Date(recent.watchedAt).getTime() : 0;
+    const shouldUpdateRecent = recent && now - recentMs < 10 * 60 * 1000;
+
+    if (shouldUpdateRecent) {
+      await fastify.prisma.watchHistory.update({
+        where: { id: recent.id },
+        data: {
+          watchedAt: new Date(now),
+          watchPercent: Math.max(recent.watchPercent, percent)
+        }
+      });
+    } else {
+      await fastify.prisma.watchHistory.create({
+        data: {
+          userId: dbUser.id,
+          videoId: id,
+          watchPercent: percent
+        }
+      });
+    }
 
     await fastify.redis.del(`recs:${dbUser.id}`);
     return { ok: true };

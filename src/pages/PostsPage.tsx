@@ -13,9 +13,11 @@ import {
 import { isAuthenticated } from "@/lib/auth";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 
-function formatPostFileSize(size: string | number) {
-  const value = Number(size);
-  if (!Number.isFinite(value) || value <= 0) return "External link";
+function formatPostFileSize(post: ApiPost) {
+  if (post.externalUrl) return "External resource";
+  if (!post.fileSize) return "No attachment";
+  const value = Number(post.fileSize);
+  if (!Number.isFinite(value) || value <= 0) return "Attached file";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
@@ -36,7 +38,6 @@ export default function PostsPage() {
   const [savedById, setSavedById] = useState<Record<string, boolean>>({});
   const [commentsById, setCommentsById] = useState<Record<string, ApiPostComment[]>>({});
   const [commentInputById, setCommentInputById] = useState<Record<string, string>>({});
-  const [actionsOpenById, setActionsOpenById] = useState<Record<string, boolean>>({});
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const openId = searchParams.get("open");
@@ -119,7 +120,6 @@ export default function PostsPage() {
     const next = new URLSearchParams(searchParams);
     next.delete("open");
     setSearchParams(next);
-    setActionsOpenById({});
   }, [searchParams, setSearchParams]);
 
   const onLike = useCallback(async (id: string) => {
@@ -137,18 +137,23 @@ export default function PostsPage() {
     }
   }, [openAuthModal]);
 
-  const onDownload = useCallback(async (id: string, fallbackUrl?: string) => {
+  const onDownload = useCallback(async (post: ApiPost) => {
+    if (post.externalUrl) {
+      openLink(post.externalUrl, false);
+      setStatus("Opening external link");
+      window.setTimeout(() => setStatus(""), 1200);
+      return;
+    }
     try {
-      const url = await fetchPostDownloadUrl(id);
+      const url = await fetchPostDownloadUrl(post.id);
       openLink(url, true);
     } catch {
-      if (fallbackUrl) {
-        openLink(fallbackUrl, true);
+      if (post.fileUrl) {
+        openLink(post.fileUrl, true);
         setStatus("Opened direct file link");
         window.setTimeout(() => setStatus(""), 1200);
         return;
       }
-
       setStatus("Download failed");
       window.setTimeout(() => setStatus(""), 1200);
     }
@@ -179,7 +184,6 @@ export default function PostsPage() {
 
   const openComments = useCallback(async (id: string) => {
     openPopup(id);
-    setActionsOpenById((prev) => ({ ...prev, [id]: false }));
     if (commentsById[id]) return;
     try {
       const rows = await fetchPostComments(id);
@@ -211,40 +215,47 @@ export default function PostsPage() {
 
   return (
     <div className="p-4 lg:p-8 max-w-[1700px] mx-auto space-y-6 relative">
-      <div className="absolute -top-6 left-0 right-0 h-48 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent blur-3xl pointer-events-none" />
+      <div className="absolute -top-6 left-0 right-0 h-48 bg-gradient-to-r from-cyan-500/10 via-blue-500/5 to-fuchsia-500/10 blur-3xl pointer-events-none" />
 
       <div className="flex items-center justify-between relative z-10">
         <div>
           <h1 className="text-3xl font-bold text-white">Creator Posts</h1>
           <p className="text-sm text-white/60 mt-1">Articles, files, and downloadable resources from creators</p>
         </div>
-        <Link to="/posts/create" className="px-4 py-2 rounded-full bg-white text-black text-sm font-semibold">Create Post</Link>
+        <Link to="/posts/create" className="px-4 py-2 rounded-full bg-white text-black text-sm font-semibold shadow-[0_0_24px_rgba(255,255,255,0.18)]">Create Post</Link>
       </div>
 
       {loading ? (
         <div className="p-12 text-center text-white/60">Loading posts...</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 relative z-10">
             {posts.map((post) => (
               <button
                 key={post.id}
                 type="button"
                 onClick={() => openPopup(post.id)}
-                className="group text-left rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-5 min-h-[260px]"
+                className="group text-left rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.06] to-black/30 backdrop-blur-xl hover:border-white/20 hover:from-white/[0.09] hover:to-white/[0.03] shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.6)] transition-all duration-300 p-6 min-h-[300px] flex flex-col"
               >
-                <div className="flex items-center justify-between gap-2 text-xs text-white/55">
-                  <p>@{post.user?.username || "creator"}</p>
-                  <span className="rounded-full border border-white/15 px-2 py-1">{formatPostFileSize(post.fileSize)}</span>
+                <div className="flex items-center justify-between gap-2 text-xs font-semibold text-white/50 w-full tracking-wide">
+                  <div className="flex items-center gap-2">
+                    <img src={post.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-6 h-6 rounded-full border border-white/10" />
+                    <p className="truncate max-w-[120px]">@{post.user?.username || "creator"}</p>
+                  </div>
+                  <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 backdrop-blur-md">{formatPostFileSize(post)}</span>
                 </div>
 
-                <h3 className="text-xl font-semibold text-white mt-4 line-clamp-2 leading-tight">{post.title}</h3>
-                <p className="text-sm text-white/75 mt-3 line-clamp-6">{post.content}</p>
+                <div className="mt-5 flex-1">
+                  <h3 className="text-[22px] font-bold text-white line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors">{post.title}</h3>
+                  <p className="text-[15px] font-medium text-white/60 mt-3 line-clamp-4 leading-relaxed">{post.content}</p>
+                </div>
 
-                <div className="mt-4 flex items-center gap-4 text-xs text-white/55">
-                  <span>{post.likeCount} likes</span>
-                  <span>{post.commentCount} comments</span>
-                  <span>{post.viewCount} views</span>
+                <div className="mt-6 flex items-center justify-between border-t border-white/5 pt-4 text-sm font-medium text-white/40">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5 group-hover:text-pink-400 transition-colors"><Heart size={16} /> {post.likeCount}</span>
+                    <span className="flex items-center gap-1.5 group-hover:text-sky-400 transition-colors"><MessageCircle size={16} /> {post.commentCount}</span>
+                  </div>
+                  <span className="flex items-center gap-1.5"><MoreVertical size={16} /></span>
                 </div>
               </button>
             ))}
@@ -255,85 +266,84 @@ export default function PostsPage() {
       )}
 
       {openPost && (
-        <div className="fixed inset-0 z-50 bg-black/70" onClick={closePopup}>
-          <div className="absolute inset-x-0 bottom-0 top-10 lg:top-16 lg:left-1/2 lg:-translate-x-1/2 lg:max-w-4xl lg:bottom-10 rounded-t-3xl lg:rounded-3xl border border-white/10 bg-[#0b0b0d] p-5 overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md" onClick={closePopup}>
+          <div className="absolute inset-x-0 bottom-0 top-10 lg:top-[8vh] lg:left-1/2 lg:-translate-x-1/2 lg:w-full lg:max-w-[800px] lg:bottom-[8vh] rounded-t-[2.5rem] lg:rounded-[2.5rem] border border-white/10 bg-black/70 backdrop-blur-2xl p-6 lg:p-8 overflow-y-auto shadow-[0_20px_80px_rgba(0,0,0,0.9)] custom-scrollbar text-white flex flex-col" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs text-white/60">@{openPost.user?.username || "creator"}</p>
-                <h2 className="text-xl font-bold text-white mt-1">{openPost.title}</h2>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/60">
-                  <span className="rounded-full border border-white/15 px-3 py-1">{openPost.visibility}</span>
-                  <span className="rounded-full border border-white/15 px-3 py-1">{openPost.fileName}</span>
-                  <span className="rounded-full border border-white/15 px-3 py-1">{formatPostFileSize(openPost.fileSize)}</span>
-                  <span>{new Date(openPost.publishedAt || openPost.createdAt).toLocaleDateString()}</span>
+              <div className="pr-4">
+                <div className="flex items-center gap-3">
+                  <img src={openPost.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-8 h-8 rounded-full border border-white/10 shadow-lg" />
+                  <p className="text-sm font-semibold text-white/70">@{openPost.user?.username || "creator"}</p>
+                </div>
+                <h2 className="text-2xl lg:text-3xl font-bold text-white mt-4 leading-tight">{openPost.title}</h2>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wide text-white/60">
+                  <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 backdrop-blur-sm uppercase">{openPost.visibility}</span>
+                  {(openPost.fileName || openPost.externalUrl) && (
+                     <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 backdrop-blur-sm truncate max-w-[200px]">{openPost.externalUrl ? "External Resource" : openPost.fileName}</span>
+                  )}
+                  <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 backdrop-blur-sm text-cyan-200">{formatPostFileSize(openPost)}</span>
+                  <span className="opacity-60 ml-2">{new Date(openPost.publishedAt || openPost.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
-              <button type="button" onClick={closePopup} className="h-9 w-9 rounded-full bg-white/10 inline-flex items-center justify-center text-white">
-                <X size={16} />
+              <button type="button" onClick={closePopup} className="h-10 w-10 shrink-0 rounded-full bg-white/10 hover:bg-white/20 inline-flex items-center justify-center text-white transition-colors">
+                <X size={20} />
               </button>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-white/90 leading-7 whitespace-pre-wrap">
+            <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-6 lg:p-8 text-white/90 text-sm lg:text-base leading-relaxed whitespace-pre-wrap flex-1 shadow-inner">
               {openPost.content}
             </div>
 
-            <div className="mt-5 relative flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="h-10 px-4 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2"
-                onClick={() => setActionsOpenById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))}
-              >
-                <MoreVertical size={16} /> Actions
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => void onLike(openPost.id)} className={`h-12 px-5 lg:px-6 rounded-2xl border ${likedById[openPost.id] ? "bg-pink-500 text-white border-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : "bg-white/5 text-white hover:bg-white/10 border-white/10"} inline-flex items-center gap-2 font-semibold transition-all hover:scale-[1.02]`}>
+                <Heart size={20} className={likedById[openPost.id] ? "fill-white" : ""} /> {likedById[openPost.id] ? 'Liked' : 'Like'}
               </button>
+              <button type="button" onClick={() => setSavedById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))} className={`h-12 px-5 lg:px-6 rounded-2xl border ${savedById[openPost.id] ? "bg-white text-black border-white" : "bg-white/5 text-white hover:bg-white/10 border-white/10"} inline-flex items-center gap-2 font-semibold transition-all hover:scale-[1.02]`}>
+                <BookmarkPlus size={20} /> {savedById[openPost.id] ? 'Saved' : 'Save'}
+              </button>
+              <button type="button" onClick={() => void onShare(openPost.id)} className="h-12 px-5 lg:px-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-white inline-flex items-center gap-2 font-semibold transition-all hover:scale-[1.02]">
+                <Share2 size={20} /> Share
+              </button>
+              
+              <div className="flex-1 min-w-[200px]" />
 
-              {actionsOpenById[openPost.id] && (
-                <div className="absolute top-12 left-0 z-20 w-[240px] rounded-2xl border border-white/15 bg-[#111115] p-2 shadow-2xl">
-                  <button type="button" onClick={() => void onLike(openPost.id)} className={`w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm ${likedById[openPost.id] ? "bg-white text-black" : "text-white hover:bg-white/10"}`}>
-                    <Heart size={15} /> {likedById[openPost.id] ? "Liked" : "Like"}
-                  </button>
-                  <button type="button" onClick={() => void openComments(openPost.id)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
-                    <MessageCircle size={15} /> Comments
-                  </button>
-                  <button type="button" onClick={() => void onShare(openPost.id)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
-                    <Share2 size={15} /> Share
-                  </button>
-                  <button type="button" onClick={() => void onDownload(openPost.id, openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
-                    <Download size={15} /> Download
-                  </button>
-                  <button type="button" onClick={() => void onCopyFileLink(openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
-                    <Link2 size={15} /> Copy Link
-                  </button>
-                  <button type="button" onClick={() => openLink(openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
-                    <ExternalLink size={15} /> Open File
-                  </button>
-                  <button type="button" onClick={() => setSavedById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))} className={`w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm ${savedById[openPost.id] ? "bg-white text-black" : "text-white hover:bg-white/10"}`}>
-                    <BookmarkPlus size={15} /> {savedById[openPost.id] ? "Saved" : "Save"}
-                  </button>
-                </div>
-              )}
+              <button type="button" onClick={() => void onDownload(openPost)} className="h-12 px-6 rounded-2xl border border-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-50 inline-flex items-center justify-center gap-2 font-bold shadow-[0_0_24px_rgba(34,211,238,0.2)] transition-all hover:scale-[1.03]">
+                <Download size={20} /> {openPost.externalUrl ? "Open Link" : "Download Attached"}
+              </button>
             </div>
 
-            <div className="mt-5 space-y-3">
-              <div className="flex gap-2">
+            <div className="mt-8 space-y-4 border-t border-white/10 pt-8">
+              <div className="flex items-center gap-2 mb-6">
+                <MessageCircle size={20} className="text-white/60" />
+                <h3 className="text-lg font-semibold text-white">Discussion</h3>
+              </div>
+              <div className="flex gap-3">
                 <input
                   value={commentInputById[openPost.id] || ""}
                   onChange={(event) => setCommentInputById((prev) => ({ ...prev, [openPost.id]: event.target.value }))}
-                  placeholder="Write a comment"
-                  className="flex-1 h-10 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white"
+                  placeholder="Share your thoughts..."
+                  className="flex-1 h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
+                  onKeyDown={(e) => { if (e.key === "Enter") void onComment(openPost.id); }}
                 />
-                <button type="button" onClick={() => void onComment(openPost.id)} className="h-10 px-4 rounded-xl bg-white text-black text-sm font-semibold">Post</button>
+                <button type="button" onClick={() => void onComment(openPost.id)} className="h-12 px-6 rounded-2xl bg-white text-black text-sm font-bold shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:bg-white/90 transition-colors">Post</button>
               </div>
 
-              {(commentsById[openPost.id] || []).map((comment) => (
-                <div key={comment.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-sm text-white">{comment.body}</p>
-                  <p className="text-xs text-white/60 mt-1">@{comment.user.username}</p>
-                </div>
-              ))}
+              <div className="pt-4 space-y-3">
+                {(commentsById[openPost.id] || []).map((comment) => (
+                  <div key={comment.id} className="rounded-[1.25rem] border border-white/5 bg-white/[0.02] p-4 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-white/50">@{comment.user.username}</p>
+                      <span className="text-[10px] text-white/30">{new Date(comment.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-[15px] font-medium text-white/90 leading-relaxed">{comment.body}</p>
+                  </div>
+                ))}
 
-              {(commentsById[openPost.id] || []).length === 0 && (
-                <p className="text-sm text-white/55">No comments yet. Start the conversation.</p>
-              )}
+                {(commentsById[openPost.id] || []).length === 0 && (
+                  <div className="py-8 text-center bg-white/[0.01] rounded-[1.25rem] border border-white/[0.02]">
+                    <p className="text-sm font-medium text-white/40">No comments yet. Start the conversation!</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

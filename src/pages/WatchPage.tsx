@@ -47,7 +47,9 @@ import {
   fetchVideoById,
   fetchVideoComments,
   fetchDownloadUrl,
+  fetchVideoInteractions,
   partitionVideosByFormat,
+  reportVideoWatch,
   toggleLike,
   toggleSave,
   isClipLikeVideo
@@ -133,6 +135,7 @@ export default function WatchPage() {
   const timeRef = useRef<HTMLSpanElement>(null);
   const wasPlayingRef = useRef(false);
   const lastWatchReportRef = useRef(0);
+  const lastWatchReportSentAtRef = useRef(0);
 
   const likeCount = useMemo(() => Math.max(0, Math.floor(video.viewCount * 0.04) + (liked ? 1 : 0)), [video.viewCount, liked]);
   const currentPlaybackUrl = playbackCandidates[playbackIndex] || "";
@@ -144,11 +147,12 @@ export default function WatchPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [videoDetails, trending, latestPool, apiComments] = await Promise.all([
+        const [videoDetails, trending, latestPool, apiComments, interactions] = await Promise.all([
           fetchVideoById(id),
           fetchTrendingVideos(),
           fetchAllVideos({ sort: "latest", limitPerPage: 80, maxPages: 20 }),
-          fetchVideoComments(id)
+          fetchVideoComments(id),
+          fetchVideoInteractions(id).catch(() => ({ liked: false, saved: false }))
         ]);
 
         if (cancelled) return;
@@ -156,8 +160,7 @@ export default function WatchPage() {
         setVideo(videoDetails.video);
         const candidates = [
           videoDetails.playbackUrl,
-          `${API_BASE}/videos/${id}/stream`,
-          `${API_BASE}/videos/${id}/playable`
+          `${API_BASE}/videos/${id}/stream`
         ].filter((item, index, arr): item is string => Boolean(item) && arr.indexOf(item) === index);
 
         setPlaybackCandidates(candidates);
@@ -165,7 +168,10 @@ export default function WatchPage() {
         setPlaybackError("");
         setSignedFallbackTried(false);
         lastWatchReportRef.current = 0;
+        lastWatchReportSentAtRef.current = 0;
         setDescription(videoDetails.description || "");
+        setLiked(interactions.liked);
+        setSaved(interactions.saved);
 
         const recommendationPool = mergeUniqueById(
           trending,
@@ -211,11 +217,19 @@ export default function WatchPage() {
 
   const reportWatchProgress = (progress: number) => {
     if (!id) return;
+    if (!isAuthenticated()) return;
+
     const normalized = Math.max(0, Math.min(1, progress));
     if (normalized < 0.05) return;
     if (normalized <= lastWatchReportRef.current + 0.05 && normalized < 1) return;
 
+    const now = Date.now();
+    if (normalized < 1 && now - lastWatchReportSentAtRef.current < 10000) return;
+
     lastWatchReportRef.current = normalized;
+    lastWatchReportSentAtRef.current = now;
+
+    void reportVideoWatch(id, normalized).catch(() => undefined);
   };
 
   const enterPlayerFullscreen = useCallback(() => {

@@ -61,6 +61,7 @@ export type ApiPost = {
   fileName: string;
   mimeType: string;
   fileSize: string | number;
+  externalUrl?: string | null;
   status: "DRAFT" | "PUBLISHED" | "FAILED";
   visibility: "PUBLIC" | "PRIVATE" | "UNLISTED";
   viewCount: number;
@@ -94,7 +95,8 @@ function mapUserToChannel(user?: ApiUser): VideoData["channel"] {
 }
 
 export function mapApiVideoToVideoData(video: ApiVideo): VideoData {
-  const fallbackThumb = `${API_BASE}/videos/${video.id}/thumbnail`;
+  const thumbVersion = encodeURIComponent(video.publishedAt || video.createdAt || "0");
+  const fallbackThumb = `${API_BASE}/videos/${video.id}/thumbnail?v=${thumbVersion}`;
   return {
     id: video.id,
     title: video.title,
@@ -287,6 +289,26 @@ export async function toggleSave(videoId: string) {
   const res = await fetch(`${API_BASE}/videos/${videoId}/save`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to toggle save");
   return res.json() as Promise<{ saved: boolean }>;
+}
+
+export async function fetchVideoInteractions(videoId: string) {
+  const res = await fetch(`${API_BASE}/videos/${videoId}/interactions`);
+  if (!res.ok) throw new Error("Failed to fetch video interactions");
+  return res.json() as Promise<{ liked: boolean; saved: boolean }>;
+}
+
+export async function reportVideoWatch(videoId: string, watchPercent: number) {
+  const normalized = Math.max(0, Math.min(1, watchPercent));
+  const res = await fetch(`${API_BASE}/videos/${videoId}/watch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ watchPercent: normalized }),
+    keepalive: true
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to report watch progress");
+  }
 }
 
 export async function fetchSavedVideos() {

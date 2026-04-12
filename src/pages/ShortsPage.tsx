@@ -28,7 +28,6 @@ export default function ShortsPage() {
 
   const gridSentinelRef = useRef<HTMLDivElement | null>(null);
   const playerSentinelRef = useRef<HTMLDivElement | null>(null);
-  const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const didJumpToInitialRef = useRef(false);
@@ -186,7 +185,7 @@ export default function ShortsPage() {
   }, [id, isPlayerMode, clips.length, playerReady]);
 
   useEffect(() => {
-    if (!isPlayerMode || !playerContainerRef.current) return;
+    if (!isPlayerMode) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -210,7 +209,6 @@ export default function ShortsPage() {
         });
       },
       {
-        root: playerContainerRef.current,
         threshold: [0.35, 0.72, 0.95]
       }
     );
@@ -385,11 +383,8 @@ export default function ShortsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-[radial-gradient(circle_at_top,rgba(28,28,28,0.8),rgba(0,0,0,0.98)_55%)] text-white">
-      <div
-        ref={playerContainerRef}
-        className="h-full overflow-y-auto snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
+    <div className="min-h-[calc(100vh-64px)] bg-[radial-gradient(circle_at_top,rgba(22,22,22,0.9),rgba(0,0,0,1)_60%)] text-white py-6">
+      <div className="space-y-6">
         {shorts.map((video) => {
           const isActive = activeVideoId === video.id;
           return (
@@ -399,9 +394,9 @@ export default function ShortsPage() {
               ref={(node) => {
                 cardRefs.current[video.id] = node;
               }}
-              className="snap-start h-[calc(100vh-64px)] flex items-center justify-center px-2 sm:px-4"
+              className="min-h-[76vh] flex items-center justify-center px-2 sm:px-4"
             >
-              <div className="relative w-full max-w-[360px] aspect-[9/16] rounded-2xl overflow-hidden border border-white/15 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)]">
+              <div className="relative w-full max-w-[360px] aspect-[9/16] rounded-2xl overflow-hidden border border-white/10 bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
                 <video
                   ref={(node) => {
                     videoRefs.current[video.id] = node;
@@ -421,11 +416,11 @@ export default function ShortsPage() {
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/70 via-transparent to-black/80" />
 
                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-                  <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+                  <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white">
                     @{video.channel.username}
                   </Link>
-                  <p className="text-sm md:text-base text-white mt-1 line-clamp-2 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">{video.title}</p>
-                  <p className="text-xs text-white/80 mt-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">{formatViewCount(video.viewCount)} views • {formatRelativeTime(video.publishedAt)}</p>
+                  <p className="text-sm text-white mt-1 line-clamp-2">{video.title}</p>
+                  <p className="text-xs text-white/70 mt-1">{formatViewCount(video.viewCount)} views • {formatRelativeTime(video.publishedAt)}</p>
                 </div>
 
                 <aside className="absolute right-3 bottom-24 flex flex-col gap-3 items-center">
@@ -462,14 +457,23 @@ export default function ShortsPage() {
 
         <div ref={playerSentinelRef} className="h-2 w-full" aria-hidden="true" />
         {loadingMore && <p className="py-4 text-center text-xs text-white/60">Loading more shorts...</p>}
-        <div className="fixed top-20 left-4 z-30">
-          <button
-            type="button"
-            onClick={() => navigate("/shorts")}
-            className="px-3 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold hover:bg-black/75"
-          >
-            All Shorts
-          </button>
+        <div className="mx-auto max-w-[360px] px-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/shorts")}
+              className="px-3 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold hover:bg-black/75"
+            >
+              All Shorts
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="px-3 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold hover:bg-black/75"
+            >
+              Home
+            </button>
+          </div>
         </div>
         {status && <p className="fixed bottom-8 left-1/2 -translate-x-1/2 text-xs bg-black/70 px-3 py-2 rounded-full border border-white/15">{status}</p>}
 

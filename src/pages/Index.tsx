@@ -52,16 +52,15 @@ export default function HomePage() {
   const { clips, landscape } = useMemo(() => splitFeedVideos(sortedVideos), [sortedVideos]);
   const landscapeVideos = landscape.slice(0, LANDSCAPE_ROWS);
   const hasDetectedClips = clips.length > 0;
-  const clipsWithFallback = useMemo(() => {
+  const clipsCarousel = useMemo(() => {
     const seen = new Set<string>();
     const merged = [...clips, ...sortedVideos].filter((video) => {
       if (seen.has(video.id)) return false;
       seen.add(video.id);
       return true;
     });
-    return merged;
-  }, [clips, sortedVideos]);
-  const clipsCarousel = (hasDetectedClips ? clipsWithFallback : sortedVideos).slice(0, CLIPS_CAROUSEL);
+    return (hasDetectedClips ? merged : sortedVideos).slice(0, CLIPS_CAROUSEL);
+  }, [clips, sortedVideos, hasDetectedClips]);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">

@@ -385,7 +385,7 @@ export default function ShortsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-black text-white">
+    <div className="h-[calc(100vh-64px)] bg-[radial-gradient(circle_at_top,rgba(28,28,28,0.8),rgba(0,0,0,0.98)_55%)] text-white">
       <div
         ref={playerContainerRef}
         className="h-full overflow-y-auto snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -401,7 +401,7 @@ export default function ShortsPage() {
               }}
               className="snap-start h-[calc(100vh-64px)] flex items-center justify-center px-2 sm:px-4"
             >
-              <div className="relative w-full max-w-[430px] h-[95%] rounded-2xl overflow-hidden border border-white/10 bg-black">
+              <div className="relative w-full max-w-[360px] aspect-[9/16] rounded-2xl overflow-hidden border border-white/15 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)]">
                 <video
                   ref={(node) => {
                     videoRefs.current[video.id] = node;
@@ -420,17 +420,12 @@ export default function ShortsPage() {
 
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/70 via-transparent to-black/80" />
 
-                <div className="absolute top-0 inset-x-0 p-4 pointer-events-none">
-                  <p className="text-sm font-semibold text-white/95 truncate">@{video.channel.username}</p>
-                  <p className="text-sm md:text-base font-medium text-white mt-1 line-clamp-2 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">{video.title}</p>
-                </div>
-
                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-                  <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white">
+                  <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
                     @{video.channel.username}
                   </Link>
-                  <p className="text-sm text-white mt-1 line-clamp-2">{video.title}</p>
-                  <p className="text-xs text-white/70 mt-1">{formatViewCount(video.viewCount)} views • {formatRelativeTime(video.publishedAt)}</p>
+                  <p className="text-sm md:text-base text-white mt-1 line-clamp-2 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">{video.title}</p>
+                  <p className="text-xs text-white/80 mt-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">{formatViewCount(video.viewCount)} views • {formatRelativeTime(video.publishedAt)}</p>
                 </div>
 
                 <aside className="absolute right-3 bottom-24 flex flex-col gap-3 items-center">

@@ -57,6 +57,7 @@ export default function VideoCard({ video }: VideoCardProps) {
               alt={video.title}
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
               loading="lazy"
+              decoding="async"
               onError={() => setThumbnailFailed(true)}
             />
           ) : (

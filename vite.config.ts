@@ -11,6 +11,18 @@ export default defineConfig(({ mode }) => {
 
   return {
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+    build: {
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/recharts")) return "charts";
+            if (id.includes("node_modules/lucide-react")) return "icons";
+            if (id.includes("node_modules")) return "vendor";
+          },
+        },
+      },
+    },
     server: {
       host: "::",
       port: 8080,

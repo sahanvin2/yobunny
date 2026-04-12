@@ -131,18 +131,31 @@ export default function HomePage() {
   const landscapeVideos = feedSplit.landscape.slice(0, firstVideoBlockSize);
   const moreLandscapeVideos = feedSplit.landscape.slice(firstVideoBlockSize);
   const clipsCarousel = feedSplit.clips.slice(0, CLIPS_CAROUSEL);
+  const skeletonCards = Math.max(Math.min(firstVideoBlockSize, 8), 4);
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">
+    <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto relative z-10">
       <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent opacity-60 pointer-events-none -z-10 rounded-t-[3rem]" />
 
       {loading && (
-        <div className="flex flex-col items-center justify-center p-32 space-y-5">
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 rounded-full border-[3px] border-white/10"></div>
-            <div className="absolute inset-0 rounded-full border-[3px] border-white border-t-transparent animate-spin"></div>
+        <div className="space-y-8" aria-hidden="true">
+          <div className="space-y-4">
+            <div className="h-7 w-44 rounded bg-white/10" />
+            <div className="grid grid-cols-1 min-[540px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8">
+              {Array.from({ length: skeletonCards }).map((_, index) => (
+                <div key={index} className="space-y-3">
+                  <div className="aspect-video rounded-2xl bg-white/10" />
+                  <div className="h-4 w-5/6 rounded bg-white/10" />
+                  <div className="h-3 w-2/3 rounded bg-white/10" />
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="text-sm font-bold text-white/50 tracking-widest uppercase">Curating content</p>
+
+          <div className="space-y-4">
+            <div className="h-7 w-40 rounded bg-white/10" />
+            <div className="h-28 rounded-2xl bg-white/10" />
+          </div>
         </div>
       )}
 

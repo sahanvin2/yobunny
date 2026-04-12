@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,32 +7,32 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import MainLayout from "@/components/layout/MainLayout";
 import AuthModalProvider from "./components/auth/AuthModalProvider";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import ChannelPage from "./pages/ChannelPage";
-import ChannelSettingsPage from "./pages/ChannelSettingsPage";
-
-import DashboardCommentsPage from "./pages/DashboardCommentsPage";
-import DashboardPage from "./pages/DashboardPage";
-import EditVideoPage from "./pages/EditVideoPage";
-import HistoryPage from "./pages/HistoryPage";
-import Index from "./pages/Index";
-import LikedPage from "./pages/LikedPage";
-import LoginPage from "./pages/LoginPage";
-import MyChannelsPage from "./pages/MyChannelsPage";
-import NotFound from "./pages/NotFound";
-import NotificationsPage from "./pages/NotificationsPage";
-import PlaylistsPage from "./pages/PlaylistsPage";
-import PostsPage from "./pages/PostsPage";
-import PostUploadPage from "./pages/PostUploadPage";
-import SavedPage from "./pages/SavedPage";
-import SearchPage from "./pages/SearchPage";
-import SettingsPage from "./pages/SettingsPage";
-import ClipsPage from "./pages/ClipsPage";
-import StreamsPage from "./pages/StreamsPage";
-import SubscriptionsPage from "./pages/SubscriptionsPage";
-import TrendingPage from "./pages/TrendingPage";
-import UploadPage from "./pages/UploadPage";
-import WatchPage from "./pages/WatchPage";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+const ChannelPage = lazy(() => import("./pages/ChannelPage"));
+const ChannelSettingsPage = lazy(() => import("./pages/ChannelSettingsPage"));
+const DashboardCommentsPage = lazy(() => import("./pages/DashboardCommentsPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const EditVideoPage = lazy(() => import("./pages/EditVideoPage"));
+const HistoryPage = lazy(() => import("./pages/HistoryPage"));
+const Index = lazy(() => import("./pages/Index"));
+const LikedPage = lazy(() => import("./pages/LikedPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const MyChannelsPage = lazy(() => import("./pages/MyChannelsPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const PlaylistsPage = lazy(() => import("./pages/PlaylistsPage"));
+const PostsPage = lazy(() => import("./pages/PostsPage"));
+const PostUploadPage = lazy(() => import("./pages/PostUploadPage"));
+const SavedPage = lazy(() => import("./pages/SavedPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ClipsPage = lazy(() => import("./pages/ClipsPage"));
+const StreamsPage = lazy(() => import("./pages/StreamsPage"));
+const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage"));
+const TrendingPage = lazy(() => import("./pages/TrendingPage"));
+const UploadPage = lazy(() => import("./pages/UploadPage"));
+const WatchPage = lazy(() => import("./pages/WatchPage"));
 
 const GlobalHooks = () => {
   usePushNotifications();
@@ -39,6 +40,10 @@ const GlobalHooks = () => {
 };
 
 const queryClient = new QueryClient();
+
+const RouteLoadingFallback = () => (
+  <div className="min-h-[40vh] flex items-center justify-center text-sm text-white/60">Loading...</div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -48,133 +53,135 @@ const App = () => (
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <GlobalHooks />
         <AuthModalProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route element={<MainLayout />}>
-              <Route path="/" element={<Index />} />
-              <Route path="/watch/:id" element={<WatchPage />} />
-              <Route
-                path="/upload"
-                element={
-                  <ProtectedRoute>
-                    <UploadPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/channel/:username" element={<ChannelPage />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/videos/:id/comments"
-                element={
-                  <ProtectedRoute>
-                    <DashboardCommentsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/videos/:id/edit"
-                element={
-                  <ProtectedRoute>
-                    <EditVideoPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <SettingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/history"
-                element={
-                  <ProtectedRoute>
-                    <HistoryPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/saved"
-                element={
-                  <ProtectedRoute>
-                    <SavedPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/notifications"
-                element={
-                  <ProtectedRoute>
-                    <NotificationsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/trending" element={<TrendingPage />} />
-              <Route path="/posts" element={<PostsPage />} />
-              <Route path="/clips" element={<ClipsPage />} />
-              <Route path="/clips/:id" element={<ClipsPage />} />
-              <Route
-                path="/posts/create"
-                element={
-                  <ProtectedRoute>
-                    <PostUploadPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/streams" element={<StreamsPage />} />
-              <Route path="/live" element={<StreamsPage />} />
-              <Route
-                path="/playlists"
-                element={
-                  <ProtectedRoute>
-                    <PlaylistsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/my-channels"
-                element={
-                  <ProtectedRoute>
-                    <MyChannelsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/my-channels/:channelId/settings"
-                element={
-                  <ProtectedRoute>
-                    <ChannelSettingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/kids" element={<Index />} />
-              <Route path="/movies" element={<Index />} />
-              <Route path="/shows" element={<Index />} />
-              <Route path="/sports" element={<Index />} />
-              <Route path="/series" element={<Index />} />
-              <Route path="/gaming" element={<Index />} />
-              <Route path="/subscriptions" element={<SubscriptionsPage />} />
-              <Route
-                path="/liked"
-                element={
-                  <ProtectedRoute>
-                    <LikedPage />
-                  </ProtectedRoute>
-                }
-              />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Index />} />
+                <Route path="/watch/:id" element={<WatchPage />} />
+                <Route
+                  path="/upload"
+                  element={
+                    <ProtectedRoute>
+                      <UploadPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/channel/:username" element={<ChannelPage />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/videos/:id/comments"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardCommentsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/videos/:id/edit"
+                  element={
+                    <ProtectedRoute>
+                      <EditVideoPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/history"
+                  element={
+                    <ProtectedRoute>
+                      <HistoryPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/saved"
+                  element={
+                    <ProtectedRoute>
+                      <SavedPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/notifications"
+                  element={
+                    <ProtectedRoute>
+                      <NotificationsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/trending" element={<TrendingPage />} />
+                <Route path="/posts" element={<PostsPage />} />
+                <Route path="/clips" element={<ClipsPage />} />
+                <Route path="/clips/:id" element={<ClipsPage />} />
+                <Route
+                  path="/posts/create"
+                  element={
+                    <ProtectedRoute>
+                      <PostUploadPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/streams" element={<StreamsPage />} />
+                <Route path="/live" element={<StreamsPage />} />
+                <Route
+                  path="/playlists"
+                  element={
+                    <ProtectedRoute>
+                      <PlaylistsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my-channels"
+                  element={
+                    <ProtectedRoute>
+                      <MyChannelsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my-channels/:channelId/settings"
+                  element={
+                    <ProtectedRoute>
+                      <ChannelSettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/kids" element={<Index />} />
+                <Route path="/movies" element={<Index />} />
+                <Route path="/shows" element={<Index />} />
+                <Route path="/sports" element={<Index />} />
+                <Route path="/series" element={<Index />} />
+                <Route path="/gaming" element={<Index />} />
+                <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                <Route
+                  path="/liked"
+                  element={
+                    <ProtectedRoute>
+                      <LikedPage />
+                    </ProtectedRoute>
+                  }
+                />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AuthModalProvider>
       </BrowserRouter>
     </TooltipProvider>

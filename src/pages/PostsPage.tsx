@@ -36,6 +36,7 @@ export default function PostsPage() {
   const [savedById, setSavedById] = useState<Record<string, boolean>>({});
   const [commentsById, setCommentsById] = useState<Record<string, ApiPostComment[]>>({});
   const [commentInputById, setCommentInputById] = useState<Record<string, string>>({});
+  const [actionsOpenById, setActionsOpenById] = useState<Record<string, boolean>>({});
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const openId = searchParams.get("open");
@@ -118,6 +119,7 @@ export default function PostsPage() {
     const next = new URLSearchParams(searchParams);
     next.delete("open");
     setSearchParams(next);
+    setActionsOpenById({});
   }, [searchParams, setSearchParams]);
 
   const onLike = useCallback(async (id: string) => {
@@ -177,6 +179,7 @@ export default function PostsPage() {
 
   const openComments = useCallback(async (id: string) => {
     openPopup(id);
+    setActionsOpenById((prev) => ({ ...prev, [id]: false }));
     if (commentsById[id]) return;
     try {
       const rows = await fetchPostComments(id);
@@ -208,14 +211,14 @@ export default function PostsPage() {
 
   return (
     <div className="p-4 lg:p-8 max-w-[1700px] mx-auto space-y-6 relative">
-      <div className="absolute -top-6 left-0 right-0 h-48 bg-gradient-to-r from-cyan-500/10 via-blue-500/5 to-fuchsia-500/10 blur-3xl pointer-events-none" />
+      <div className="absolute -top-6 left-0 right-0 h-48 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent blur-3xl pointer-events-none" />
 
       <div className="flex items-center justify-between relative z-10">
         <div>
           <h1 className="text-3xl font-bold text-white">Creator Posts</h1>
           <p className="text-sm text-white/60 mt-1">Articles, files, and downloadable resources from creators</p>
         </div>
-        <Link to="/posts/create" className="px-4 py-2 rounded-full bg-white text-black text-sm font-semibold shadow-[0_0_24px_rgba(255,255,255,0.18)]">Create Post</Link>
+        <Link to="/posts/create" className="px-4 py-2 rounded-full bg-white text-black text-sm font-semibold">Create Post</Link>
       </div>
 
       {loading ? (
@@ -228,7 +231,7 @@ export default function PostsPage() {
                 key={post.id}
                 type="button"
                 onClick={() => openPopup(post.id)}
-                className="group text-left rounded-3xl border border-white/10 bg-gradient-to-b from-white/8 to-white/[0.02] hover:from-white/15 hover:to-white/[0.04] transition-colors p-5 min-h-[260px]"
+                className="group text-left rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-5 min-h-[260px]"
               >
                 <div className="flex items-center justify-between gap-2 text-xs text-white/55">
                   <p>@{post.user?.username || "creator"}</p>
@@ -274,31 +277,40 @@ export default function PostsPage() {
               {openPost.content}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button type="button" onClick={() => void onLike(openPost.id)} className={`h-10 px-3 rounded-xl border border-white/20 inline-flex items-center gap-2 ${likedById[openPost.id] ? "bg-white text-black" : "bg-white/10 text-white"}`}>
-                <Heart size={16} /> Like
+            <div className="mt-5 relative flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="h-10 px-4 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2"
+                onClick={() => setActionsOpenById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))}
+              >
+                <MoreVertical size={16} /> Actions
               </button>
-              <button type="button" onClick={() => setSavedById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))} className={`h-10 px-3 rounded-xl border border-white/20 inline-flex items-center gap-2 ${savedById[openPost.id] ? "bg-white text-black" : "bg-white/10 text-white"}`}>
-                <BookmarkPlus size={16} /> Add
-              </button>
-              <button type="button" onClick={() => void onShare(openPost.id)} className="h-10 px-3 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2">
-                <Share2 size={16} /> Share
-              </button>
-              <button type="button" onClick={() => void onDownload(openPost.id, openPost.fileUrl)} className="h-10 px-3 rounded-xl border border-cyan-300/40 bg-cyan-400/10 text-cyan-100 inline-flex items-center gap-2">
-                <Download size={16} /> Download
-              </button>
-              <button type="button" onClick={() => void onCopyFileLink(openPost.fileUrl)} className="h-10 px-3 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2">
-                <Link2 size={16} /> Copy Link
-              </button>
-              <button type="button" onClick={() => openLink(openPost.fileUrl)} className="h-10 px-3 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2">
-                <ExternalLink size={16} /> Open File
-              </button>
-              <button type="button" className="h-10 px-3 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2" onClick={() => setStatus("More actions coming soon") }>
-                <MoreVertical size={16} /> More
-              </button>
-              <button type="button" className="h-10 px-3 rounded-xl border border-white/20 bg-white/10 text-white inline-flex items-center gap-2" onClick={() => void openComments(openPost.id)}>
-                <MessageCircle size={16} /> Comments
-              </button>
+
+              {actionsOpenById[openPost.id] && (
+                <div className="absolute top-12 left-0 z-20 w-[240px] rounded-2xl border border-white/15 bg-[#111115] p-2 shadow-2xl">
+                  <button type="button" onClick={() => void onLike(openPost.id)} className={`w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm ${likedById[openPost.id] ? "bg-white text-black" : "text-white hover:bg-white/10"}`}>
+                    <Heart size={15} /> {likedById[openPost.id] ? "Liked" : "Like"}
+                  </button>
+                  <button type="button" onClick={() => void openComments(openPost.id)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
+                    <MessageCircle size={15} /> Comments
+                  </button>
+                  <button type="button" onClick={() => void onShare(openPost.id)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
+                    <Share2 size={15} /> Share
+                  </button>
+                  <button type="button" onClick={() => void onDownload(openPost.id, openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
+                    <Download size={15} /> Download
+                  </button>
+                  <button type="button" onClick={() => void onCopyFileLink(openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
+                    <Link2 size={15} /> Copy Link
+                  </button>
+                  <button type="button" onClick={() => openLink(openPost.fileUrl)} className="w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm text-white hover:bg-white/10">
+                    <ExternalLink size={15} /> Open File
+                  </button>
+                  <button type="button" onClick={() => setSavedById((prev) => ({ ...prev, [openPost.id]: !prev[openPost.id] }))} className={`w-full h-10 px-3 rounded-lg inline-flex items-center gap-2 text-sm ${savedById[openPost.id] ? "bg-white text-black" : "text-white hover:bg-white/10"}`}>
+                    <BookmarkPlus size={15} /> {savedById[openPost.id] ? "Saved" : "Save"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 space-y-3">

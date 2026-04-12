@@ -205,6 +205,8 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] h-20 sm:h-24 lg:h-28" aria-hidden="true" />
         </div>
       )}
 

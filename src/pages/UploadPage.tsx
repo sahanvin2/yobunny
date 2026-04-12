@@ -457,6 +457,10 @@ export default function UploadPage() {
               src={thumbnailPreviewUrl}
               alt="Thumbnail preview"
               className="w-full aspect-video rounded-xl object-cover bg-background mb-3"
+              loading="lazy"
+              decoding="async"
+              width={1280}
+              height={720}
               onError={(event) => {
                 event.currentTarget.style.display = "none";
               }}
@@ -485,6 +489,11 @@ export default function UploadPage() {
                       src={previewUrl}
                       alt={`Generated thumbnail ${index + 1}`}
                       className="w-full aspect-video object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      width={320}
+                      height={180}
+                      sizes="(min-width: 1024px) 10vw, 28vw"
                       onError={(event) => {
                         event.currentTarget.style.opacity = "0.4";
                       }}

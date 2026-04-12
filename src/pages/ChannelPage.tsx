@@ -96,7 +96,7 @@ export default function ChannelPage() {
     <div className="space-y-10 pb-16 min-h-screen">
       <div className="h-[250px] lg:h-[350px] relative overflow-hidden group">
         {channel.bannerUrl && !bannerFailed ? (
-          <img src={channel.bannerUrl} alt={`${channel.displayName} banner`} className="absolute inset-0 h-full w-full object-cover transition-transform [transition-duration:10s] group-hover:scale-105" onError={() => setBannerFailed(true)} />
+          <img src={channel.bannerUrl} alt={`${channel.displayName} banner`} className="absolute inset-0 h-full w-full object-cover transition-transform [transition-duration:10s] group-hover:scale-105" loading="eager" decoding="async" width={1600} height={350} onError={() => setBannerFailed(true)} />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-black to-blue-950 opacity-80" />
         )}
@@ -110,7 +110,7 @@ export default function ChannelPage() {
           <div className="relative group/avatar shrink-0 z-20">
              <div className="absolute -inset-1 bg-gradient-to-tr from-primary to-primary/20 rounded-full opacity-30 blur-2xl group-hover/avatar:opacity-70 transition-opacity duration-700 animate-pulse" />
              <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-500" />
-             <img src={avatarFailed ? "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff" : (channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff")} alt={channel.displayName} className="w-[140px] h-[140px] md:w-[180px] md:h-[180px] rounded-full border-[6px] border-background bg-card relative z-10 object-cover shadow-[0_0_50px_rgba(0,0,0,0.8)] transition-transform duration-700 ease-out group-hover/avatar:scale-[1.03]" onError={() => setAvatarFailed(true)} />
+             <img src={avatarFailed ? "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff" : (channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff")} alt={channel.displayName} className="w-[140px] h-[140px] md:w-[180px] md:h-[180px] rounded-full border-[6px] border-background bg-card relative z-10 object-cover shadow-[0_0_50px_rgba(0,0,0,0.8)] transition-transform duration-700 ease-out group-hover/avatar:scale-[1.03]" loading="eager" decoding="async" width={180} height={180} onError={() => setAvatarFailed(true)} />
           </div>
           
           <div className="flex-1 text-center md:text-left pb-2 flex flex-col items-center md:items-start z-10">

@@ -393,7 +393,7 @@ export default function EditVideoPage() {
             <p className="block text-sm font-medium text-foreground mb-1.5">Thumbnail</p>
             <div className="rounded-xl overflow-hidden border border-border bg-background aspect-video">
               {thumbnailUrl ? (
-                <img src={thumbnailUrl} alt="Current thumbnail" className="w-full h-full object-cover" />
+                <img src={thumbnailUrl} alt="Current thumbnail" className="w-full h-full object-cover" loading="lazy" decoding="async" width={1280} height={720} />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">No thumbnail yet</div>
               )}
@@ -437,7 +437,7 @@ export default function EditVideoPage() {
                         onClick={() => setSelectedThumbnailCandidateId(candidate.id)}
                         className={`rounded-lg overflow-hidden border ${selected ? "border-primary" : "border-border"}`}
                       >
-                        <img src={candidate.previewUrl} alt="Thumbnail option" className="w-full aspect-video object-cover" />
+                        <img src={candidate.previewUrl} alt="Thumbnail option" className="w-full aspect-video object-cover" loading="lazy" decoding="async" width={320} height={180} sizes="(min-width: 1024px) 12vw, 33vw" />
                       </button>
                     );
                   })}

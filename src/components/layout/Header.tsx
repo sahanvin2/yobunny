@@ -153,7 +153,7 @@ export default function Header() {
       </button>
 
       <Link to="/" className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
-        <img src="/logo.png" alt="YoBunny" className="w-8 h-8 rounded-md" />
+        <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 rounded-md" width={32} height={32} fetchPriority="high" decoding="async" />
         <span className="text-foreground font-bold text-lg tracking-tight">YoBunny</span>
       </Link>
 
@@ -181,7 +181,7 @@ export default function Header() {
               <div className="px-2 space-y-1 max-h-[420px] overflow-auto">
                 {suggestions.map((item) => (
                   <Link key={`${item.type}-${item.id}`} to={item.href} className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl transition-colors">
-                    <img src={item.thumb} alt={item.title} className="w-16 h-9 rounded-lg object-cover flex-shrink-0 bg-secondary border border-border" loading="lazy" />
+                    <img src={item.thumb} alt={item.title} className="w-16 h-9 rounded-lg object-cover flex-shrink-0 bg-secondary border border-border" loading="lazy" decoding="async" width={64} height={36} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="flex-1 truncate text-sm font-medium text-foreground">{item.title}</span>
@@ -202,14 +202,6 @@ export default function Header() {
             </div>
           )}
         </div>
-
-        <Link
-          to={searchQuery ? `/search?q=${encodeURIComponent(searchQuery)}` : "/search"}
-          className="sm:hidden inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface border border-border text-muted-foreground"
-          aria-label="Search"
-        >
-          <Search size={18} />
-        </Link>
       </div>
 
       <div className="flex items-center gap-1">
@@ -234,7 +226,7 @@ export default function Header() {
               onClick={() => setProfileOpen(!profileOpen)}
               className="ml-2 w-9 h-9 rounded-full bg-surface border border-border overflow-hidden"
             >
-              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" onError={() => setAvatarUrl(fallbackAvatar)} />
+              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" width={36} height={36} decoding="async" onError={() => setAvatarUrl(fallbackAvatar)} />
             </button>
             
             {profileOpen && (
@@ -243,7 +235,7 @@ export default function Header() {
                 <div className="absolute right-0 top-[calc(100%+8px)] w-[260px] bg-surface border border-border shadow-2xl rounded-3xl p-3 z-50 animate-fade-in divide-y divide-border/50">
                 <div className="pb-3 text-center">
                   <div className="w-16 h-16 rounded-full mx-auto mb-2 overflow-hidden border-2 border-border relative">
-                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" onError={() => setAvatarUrl(fallbackAvatar)} />
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" width={64} height={64} loading="lazy" decoding="async" onError={() => setAvatarUrl(fallbackAvatar)} />
                     <div className="absolute bottom-0 right-0 w-4 h-4 bg-yellow-500 rounded-full border border-black flex items-center justify-center text-[10px] font-bold text-black">!</div>
                   </div>
                   <h3 className="text-[15px] font-semibold text-foreground">{displayName}</h3>

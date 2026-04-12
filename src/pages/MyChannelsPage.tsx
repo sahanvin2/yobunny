@@ -267,7 +267,7 @@ export default function MyChannelsPage() {
                     
                     {/* Banner Area */}
                     <div className="relative h-36 bg-gradient-to-br from-primary/30 via-black to-zinc-900 group/banner">
-                        {channel.bannerUrl && <img src={channel.bannerUrl} alt="banner" className="absolute inset-0 h-full w-full object-cover opacity-80" />}
+                      {channel.bannerUrl && <img src={channel.bannerUrl} alt="banner" className="absolute inset-0 h-full w-full object-cover opacity-80" loading="lazy" decoding="async" width={1600} height={360} />}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/banner:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm z-10">
                             <label className="cursor-pointer bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2 shadow-2xl transition-colors">
                                 <ImageIcon size={16} /> Update Banner Cover
@@ -289,6 +289,10 @@ export default function MyChannelsPage() {
                                 src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"}
                                 alt="avatar"
                                 className="w-full h-full rounded-2xl border-4 border-[#070707] object-cover bg-black shadow-xl"
+                            loading="lazy"
+                            decoding="async"
+                            width={96}
+                            height={96}
                             />
                             <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity rounded-2xl flex items-center justify-center cursor-pointer backdrop-blur-[2px]">
                                 <Camera className="text-white" size={24} />

@@ -1,13 +1,13 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Search, Plus, Users, User } from "lucide-react";
+import { Home, Search, Plus, Users, Scissors } from "lucide-react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
 
 const items = [
   { icon: Home, label: "Home", path: "/" },
-  { icon: Search, label: "Search", path: "/search" },
+  { icon: Scissors, label: "Clips", path: "/clips" },
   { icon: Plus, label: "Upload", path: "/upload", isUpload: true, protected: true },
   { icon: Users, label: "Subs", path: "/subscriptions" },
-  { icon: User, label: "Profile", path: "/settings", protected: true },
+  { icon: Search, label: "Search", path: "/search" },
 ];
 
 export default function BottomNav() {

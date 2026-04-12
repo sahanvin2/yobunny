@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import VideoGrid from "@/components/video/VideoGrid";
-import { fetchAllVideos, fetchPosts, partitionVideosByFormat, type ApiPost } from "@/lib/api";
+import { API_BASE, fetchAllVideos, fetchPosts, partitionVideosByFormat, type ApiPost } from "@/lib/api";
 import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
 import { useIsMobile } from "@/hooks/use-mobile";
+import SmartImage from "@/components/ui/SmartImage";
 
 const CLIPS_CAROUSEL = 80;
 const HOME_POST_LIMIT = 3;
@@ -136,14 +137,22 @@ export default function HomePage() {
   useEffect(() => {
     if (loading || error || landscapeVideos.length === 0) return;
 
-    const firstThumb = landscapeVideos[0]?.thumbnailUrl;
+    const firstVideo = landscapeVideos[0];
+    const firstThumb = firstVideo?.thumbnailUrl;
     if (!firstThumb) return;
+    const responsiveSrcSet = firstVideo
+      ? `${API_BASE}/videos/${firstVideo.id}/thumbnail?w=320 320w, ${API_BASE}/videos/${firstVideo.id}/thumbnail?w=640 640w, ${API_BASE}/videos/${firstVideo.id}/thumbnail?w=960 960w`
+      : "";
 
     const preload = document.createElement("link");
     preload.rel = "preload";
     preload.as = "image";
     preload.href = firstThumb;
     preload.setAttribute("fetchpriority", "high");
+    if (responsiveSrcSet) {
+      preload.setAttribute("imagesrcset", responsiveSrcSet);
+      preload.setAttribute("imagesizes", "(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 540px) 50vw, 100vw");
+    }
     document.head.appendChild(preload);
 
     return () => {
@@ -202,13 +211,15 @@ export default function HomePage() {
               <div className="flex gap-3 min-w-max">
                 {clipsCarousel.map((clip, index) => (
                   <Link key={clip.id} to={`/clips/${clip.id}`} className="group flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-44 h-64 md:w-52 md:h-72">
-                    <div className="relative w-full h-full">
-                      <img
+                    <div className="relative w-full h-full block min-h-[256px] md:min-h-[288px]">
+                      <SmartImage
                         src={clip.thumbnailUrl}
                         alt={clip.title}
+                        priority={index === 0}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        loading={index === 0 ? "eager" : "lazy"}
+                        loading={index < 3 ? "eager" : "lazy"}
                         decoding="async"
+                        fetchPriority={index === 0 ? "high" : "auto"}
                         width={208}
                         height={288}
                         sizes="(min-width: 768px) 208px, 176px"

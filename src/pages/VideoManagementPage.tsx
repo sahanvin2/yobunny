@@ -103,7 +103,7 @@ export default function VideoManagementPage() {
                         <td className="px-6 py-3 sticky left-0 bg-surface group-hover:bg-surface-hover z-10 transition-colors">
                            <div className="flex items-start gap-4">
                               <div className="relative w-32 aspect-video bg-background rounded-lg overflow-hidden flex-shrink-0 border border-border/50">
-                                                  <img src={v.thumbnailUrl || `https://placehold.co/320x180?text=${encodeURIComponent("No Thumbnail")}`} className="w-full h-full object-cover" alt="thumb" />
+                                                                           <img src={v.thumbnailUrl || `https://placehold.co/320x180?text=${encodeURIComponent("No Thumbnail")}`} className="w-full h-full object-cover" alt="thumb" loading="lazy" decoding="async" width={320} height={180} sizes="128px" />
                                 <span className="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 text-[10px] rounded font-medium text-white">{formatDuration(v.duration)}</span>
                               </div>
                               <div className="flex flex-col min-w-0">

@@ -74,7 +74,7 @@ export default function DashboardCommentsPage() {
           ) : (
             comments.map((c) => (
               <div key={c.id} className="flex gap-4 p-4 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
-                <img src={c.user.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${c.user.username}`} alt={c.user.displayName} className="w-10 h-10 rounded-full bg-white/10 object-cover flex-shrink-0" />
+                <img src={c.user.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${c.user.username}`} alt={c.user.displayName} className="w-10 h-10 rounded-full bg-white/10 object-cover flex-shrink-0" loading="lazy" decoding="async" width={40} height={40} />
                 <div>
                   <div className="flex items-baseline gap-2 mb-1">
                     <span className="font-semibold text-white text-sm">{c.user.displayName}</span>

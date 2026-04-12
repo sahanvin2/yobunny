@@ -24,9 +24,12 @@ export default function ClipGrid({ clips, mode = "grid" }: ClipGridProps) {
                 <img
                   src={clip.thumbnailUrl}
                   alt={clip.title}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                  className="w-full h-full min-h-[220px] object-cover transition-transform duration-300 group-hover:scale-[1.04]"
                   loading="lazy"
                   decoding="async"
+                  width={360}
+                  height={640}
+                  sizes={isRow ? "220px" : "(min-width: 1280px) 16vw, (min-width: 1024px) 18vw, (min-width: 640px) 25vw, 50vw"}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-80 pointer-events-none" />
                 <div className="absolute inset-x-0 bottom-0 p-3 flex items-end justify-between gap-2">

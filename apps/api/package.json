@@ -28,6 +28,7 @@
     "firebase-admin": "^13.0.1",
     "image-size": "^1.1.1",
     "ioredis": "^5.4.1",
+    "sharp": "^0.34.5",
     "vite_react_shadcn_ts": "file:../..",
     "zod": "^3.23.8"
   },

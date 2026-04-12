@@ -62,7 +62,7 @@ export default function VideoGrid({ videos, title, hasMoreFromServer = false, lo
       )}
       <div className="grid grid-cols-1 min-[540px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8">
         {visibleVideos.map((video, index) => (
-          <VideoCard key={video.id} video={video} priority={index < 2} />
+          <VideoCard key={video.id} video={video} priority={index < 3} />
         ))}
       </div>
       {(hasMoreLocal || canRequestMore) && <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />}

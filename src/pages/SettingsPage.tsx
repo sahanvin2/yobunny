@@ -137,7 +137,7 @@ export default function SettingsPage() {
 
               <div className="w-full h-32 md:h-48 rounded-2xl bg-black/40 border border-white/10 overflow-hidden relative shadow-inner">
                 {bannerUrl ? (
-                  <img src={bannerUrl} alt="Banner preview" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerUrl("")} />
+                  <img src={bannerUrl} alt="Banner preview" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerUrl("")} loading="lazy" decoding="async" width={1600} height={400} />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent z-0" />
                 )}
@@ -152,7 +152,7 @@ export default function SettingsPage() {
 
               <div className="absolute -bottom-10 left-8 group/avatar cursor-pointer">
                 <div className="relative">
-                  <img src={avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} className="w-24 h-24 rounded-full border-4 border-black object-cover shadow-2xl relative z-10 transition-transform duration-300 group-hover/avatar:scale-105" alt="Avatar" onError={() => setAvatarUrl("")} />
+                  <img src={avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} className="w-24 h-24 rounded-full border-4 border-black object-cover shadow-2xl relative z-10 transition-transform duration-300 group-hover/avatar:scale-105" alt="Avatar" onError={() => setAvatarUrl("")} loading="lazy" decoding="async" width={96} height={96} />
                   <button type="button" onClick={() => avatarInputRef.current?.click()} className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-full bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity text-white">
                     <Upload size={20} />
                     <span className="mt-1 text-[11px] font-bold tracking-wide">{uploadingAvatar ? "Uploading..." : "Change"}</span>

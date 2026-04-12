@@ -8,9 +8,6 @@ export function usePushNotifications() {
     useEffect(() => {
         if (!('Notification' in window)) return;
         setPermission(Notification.permission);
-        if (Notification.permission === 'default') {
-            Notification.requestPermission().then(setPermission);
-        }
     }, []);
 
     useEffect(() => {
@@ -20,6 +17,9 @@ export function usePushNotifications() {
         let isFirstRun = true;
 
         const checkNotifications = async () => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
             try {
                 const data = await fetchNotifications();
                 const unread = data.items.filter(n => !n.isRead);
@@ -35,7 +35,7 @@ export function usePushNotifications() {
                         notifiedSet.add(n.id);
                         new Notification('YoBunny', {
                             body: n.message,
-                            icon: '/logo.png',
+                            icon: '/logo.webp',
                             silent: false
                         });
                     }

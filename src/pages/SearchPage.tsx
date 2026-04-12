@@ -122,8 +122,8 @@ export default function SearchPage() {
 
         {type === "videos" && visibleVideoResults.map((v) => (
           <Link key={v.id} to={`/watch/${v.id}`} className="flex gap-4 group rounded-2xl p-2 hover:bg-surface transition-colors">
-            <div className="relative w-56 sm:w-64 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0 border border-border/60">
-              <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
+            <div className="relative w-56 sm:w-64 aspect-video min-h-[126px] sm:min-h-[144px] rounded-2xl overflow-hidden bg-surface flex-shrink-0 border border-border/60 block">
+              <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={360} sizes="(min-width: 640px) 256px, 224px" />
               <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground">
                 {formatDuration(v.duration)}
               </span>
@@ -134,7 +134,7 @@ export default function SearchPage() {
                 {formatViewCount(v.viewCount)} views · {formatRelativeTime(v.publishedAt)}
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <img src={v.channel.avatarUrl} alt={v.channel.displayName} className="w-6 h-6 rounded-full bg-surface" />
+                <img src={v.channel.avatarUrl} alt={v.channel.displayName} className="w-6 h-6 rounded-full bg-surface" loading="lazy" decoding="async" width={24} height={24} />
                 <span className="text-xs text-muted-foreground">{v.channel.displayName}</span>
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function SearchPage() {
 
         {type === "channels" && visibleChannelResults.map((channel) => (
           <Link key={channel.username} to={`/channel/${channel.username}`} className="flex items-center gap-4 p-3 rounded-2xl bg-surface hover:bg-surface-hover transition-colors border border-border/60">
-            <img src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} alt={channel.displayName} className="w-14 h-14 rounded-full bg-background border border-border/60 object-cover" />
+            <img src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} alt={channel.displayName} className="w-14 h-14 rounded-full bg-background border border-border/60 object-cover" loading="lazy" decoding="async" width={56} height={56} />
             <div>
               <p className="text-sm font-semibold text-foreground">
                 {channel.displayName}

@@ -45,8 +45,8 @@ export default function HistoryPage() {
                 const v = entry.video;
                 return (
                   <Link key={`${label}-${v.id}-${entry.watchedAt}`} to={`/watch/${v.id}`} className="flex gap-4 group">
-                    <div className="relative w-44 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0">
-                      <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="relative w-44 aspect-video min-h-[99px] rounded-2xl overflow-hidden bg-surface flex-shrink-0 block">
+                      <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={360} sizes="176px" />
                       <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground">
                         {formatDuration(v.duration)}
                       </span>

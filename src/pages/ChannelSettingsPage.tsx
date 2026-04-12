@@ -124,7 +124,7 @@ export default function ChannelSettingsPage() {
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
         <div className="relative h-40 bg-gradient-to-r from-primary/20 via-cyan-500/10 to-transparent">
-          {channel.bannerUrl && <img src={channel.bannerUrl} alt="Banner" className="absolute inset-0 w-full h-full object-cover" />}
+          {channel.bannerUrl && <img src={channel.bannerUrl} alt="Banner" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" width={1280} height={320} />}
           <label className="absolute top-3 right-3 h-9 px-3 rounded-lg border border-white/15 bg-black/40 text-xs text-white inline-flex items-center cursor-pointer">
             Change banner
             <input
@@ -151,6 +151,10 @@ export default function ChannelSettingsPage() {
               src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"}
               alt="Avatar"
               className="w-20 h-20 rounded-full object-cover border-2 border-background"
+              loading="lazy"
+              decoding="async"
+              width={80}
+              height={80}
             />
             <label className="h-9 px-3 rounded-lg border border-white/15 text-xs text-foreground inline-flex items-center cursor-pointer">
               Change avatar

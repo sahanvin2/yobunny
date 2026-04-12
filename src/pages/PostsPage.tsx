@@ -239,7 +239,7 @@ export default function PostsPage() {
               >
                 <div className="flex items-center justify-between gap-2 text-xs font-semibold text-white/50 w-full tracking-wide">
                   <div className="flex items-center gap-2">
-                    <img src={post.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-6 h-6 rounded-full border border-white/10" />
+                    <img src={post.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-6 h-6 rounded-full border border-white/10" loading="lazy" decoding="async" width={24} height={24} />
                     <p className="truncate max-w-[120px]">@{post.user?.username || "creator"}</p>
                   </div>
                   <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 backdrop-blur-md">{formatPostFileSize(post)}</span>
@@ -271,7 +271,7 @@ export default function PostsPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="pr-4">
                 <div className="flex items-center gap-3">
-                  <img src={openPost.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-8 h-8 rounded-full border border-white/10 shadow-lg" />
+                  <img src={openPost.user?.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=creator"} alt="" className="w-8 h-8 rounded-full border border-white/10 shadow-lg" loading="lazy" decoding="async" width={32} height={32} />
                   <p className="text-sm font-semibold text-white/70">@{openPost.user?.username || "creator"}</p>
                 </div>
                 <h2 className="text-2xl lg:text-3xl font-bold text-white mt-4 leading-tight">{openPost.title}</h2>

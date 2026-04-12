@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { Play, MoreVertical, Clock, MinusCircle, UserX, Share2, AlertCircle, Facebook, Twitter, MessageCircle, Link as LinkIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { VideoData, formatViewCount, formatDuration, formatRelativeTime } from "@/lib/mockData";
+import SmartImage from "@/components/ui/SmartImage";
+import { API_BASE } from "@/lib/api";
 
 interface VideoCardProps {
   video: VideoData;
@@ -16,6 +18,7 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
   const [shareStatus, setShareStatus] = useState("");
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const thumbnailSrcSet = `${API_BASE}/videos/${video.id}/thumbnail?w=320 320w, ${API_BASE}/videos/${video.id}/thumbnail?w=640 640w, ${API_BASE}/videos/${video.id}/thumbnail?w=960 960w`;
 
   useEffect(() => {
     setThumbnailFailed(false);
@@ -53,12 +56,14 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
       <Link to={`/watch/${video.id}`} className="group block">
         <div className="relative aspect-video rounded-[1.5rem] overflow-hidden bg-[#111] mb-4 border border-white/5 shadow-lg group-hover/card:shadow-[0_20px_50px_rgba(0,0,0,0.5)] group-hover/card:border-white/10 transition-all duration-500">
           {!thumbnailFailed ? (
-            <img
+            <SmartImage
               src={video.thumbnailUrl}
               alt={video.title}
-              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
+              srcSet={thumbnailSrcSet}
+              className="w-full h-full min-h-[140px] object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
               loading={priority ? "eager" : "lazy"}
               decoding="async"
+              priority={priority}
               width={1280}
               height={720}
               sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 540px) 50vw, 100vw"

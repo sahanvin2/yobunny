@@ -150,7 +150,7 @@ export default function WatchPage() {
         const [videoDetails, trending, latestPool, apiComments, interactions] = await Promise.all([
           fetchVideoById(id),
           fetchTrendingVideos(),
-          fetchAllVideos({ sort: "latest", limitPerPage: 80, maxPages: 20 }),
+          fetchAllVideos({ sort: "latest", limitPerPage: 40, maxPages: 4 }),
           fetchVideoComments(id),
           fetchVideoInteractions(id).catch(() => ({ liked: false, saved: false }))
         ]);
@@ -494,6 +494,7 @@ export default function WatchPage() {
               ref={videoRef}
               src={currentPlaybackUrl}
               poster={video.thumbnailUrl}
+              preload="metadata"
               controls={isMobile}
               controlsList="nodownload noplaybackrate noremoteplayback"
               disablePictureInPicture
@@ -525,7 +526,7 @@ export default function WatchPage() {
               onEnded={() => reportWatchProgress(1)}
             />
           ) : (
-            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-contain" />
+            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-contain" width={1280} height={720} loading="eager" decoding="async" fetchPriority="high" />
           )}
 
           {!isMobile && !playing && (
@@ -742,6 +743,9 @@ export default function WatchPage() {
               src={video.channel.avatarUrl}
               alt={video.channel.displayName}
               className="w-10 h-10 rounded-full bg-surface object-cover"
+              width={40}
+              height={40}
+              decoding="async"
               onError={(event) => {
                 event.currentTarget.src = FALLBACK_AVATAR;
               }}
@@ -806,6 +810,10 @@ export default function WatchPage() {
                           src={comment.user.avatarUrl}
                           alt={comment.user.displayName}
                           className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
+                          width={32}
+                          height={32}
+                          loading="lazy"
+                          decoding="async"
                           onError={(event) => {
                             event.currentTarget.src = FALLBACK_AVATAR;
                           }}
@@ -851,6 +859,10 @@ export default function WatchPage() {
                       src={comment.user.avatarUrl}
                       alt={comment.user.displayName}
                       className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
+                      width={32}
+                      height={32}
+                      loading="lazy"
+                      decoding="async"
                       onError={(event) => {
                         event.currentTarget.src = FALLBACK_AVATAR;
                       }}
@@ -880,6 +892,10 @@ export default function WatchPage() {
                     alt={v.title}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    decoding="async"
+                    width={320}
+                    height={180}
+                    sizes="160px"
                     onError={(event) => {
                       event.currentTarget.src = FALLBACK_THUMBNAIL;
                     }}
@@ -910,6 +926,10 @@ export default function WatchPage() {
                 alt={v.title}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                decoding="async"
+                width={320}
+                height={180}
+                sizes="160px"
                 onError={(event) => {
                   event.currentTarget.src = FALLBACK_THUMBNAIL;
                 }}

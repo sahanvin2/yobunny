@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import ffmpegPath from "ffmpeg-static";
+import sharp from "sharp";
 import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -40,6 +41,7 @@ const AUTO_CLIP_TAG = "__AUTO_CLIP__";
 const UPLOAD_SESSION_TAG_PREFIX = "__UPLOAD_SESSION__:";
 const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 const TRANSCODED_KEY_PREFIX = "local/transcoded";
+const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
 const transcodeLocks = new Map<string, Promise<void>>();
 
 function extFromKey(key: string) {
@@ -209,6 +211,13 @@ async function compressImageToWebp(imageBuffer: Buffer) {
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+async function createResponsiveThumbnail(imageBuffer: Buffer, width: number) {
+  return sharp(imageBuffer)
+    .resize({ width, withoutEnlargement: true })
+    .webp({ quality: 72, effort: 4 })
+    .toBuffer();
 }
 
 async function downloadToFile(url: string, filePath: string) {
@@ -604,12 +613,12 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         try {
           const generatedThumbBuffer = await createThumbnailFromVideoBuffer(buffer);
           if (generatedThumbBuffer) {
-            const thumbExt = "jpg";
+            const thumbExt = "webp";
             const thumbVersion = Date.now();
             const thumbKey = `thumbnails/${video.id}/thumb-${thumbVersion}.${thumbExt}`;
 
             try {
-              const uploaded = await uploadObjectToB2(thumbKey, generatedThumbBuffer, "image/jpeg", 15000);
+              const uploaded = await uploadObjectToB2(thumbKey, generatedThumbBuffer, "image/webp", 15000);
               thumbnailUrl = uploaded.publicUrl;
             } catch {
               const localThumbKey = `local/${dbUser.id}/${video.id}/thumb.${thumbExt}`;
@@ -740,6 +749,8 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/:id/thumbnail", async (request, reply) => {
     const id = (request.params as { id: string }).id;
+    const widthParam = Number((request.query as { w?: string | number }).w || 0);
+    const requestedWidth = Number.isFinite(widthParam) && THUMB_WIDTHS.has(widthParam) ? widthParam : 0;
     const video = await fastify.prisma.video.findUnique({ where: { id } });
 
     if (!video) {
@@ -751,8 +762,27 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       const localThumbKey = `local/${video.userId}/${video.id}/thumb.${ext}`;
       if (await hasLocalObject(localThumbKey)) {
         const buffer = await readLocalObject(localThumbKey);
+        if (requestedWidth > 0) {
+          const resizedThumbKey = `local/${video.userId}/${video.id}/thumb-${requestedWidth}.webp`;
+          if (await hasLocalObject(resizedThumbKey)) {
+            const resized = await readLocalObject(resizedThumbKey);
+            reply.header("Content-Type", "image/webp");
+            reply.header("Cache-Control", "public, max-age=31536000, immutable, stale-while-revalidate=604800");
+            reply.header("Vary", "Accept");
+            return reply.send(resized);
+          }
+
+          const resized = await createResponsiveThumbnail(buffer, requestedWidth);
+          await writeLocalObject(resizedThumbKey, resized);
+          reply.header("Content-Type", "image/webp");
+          reply.header("Cache-Control", "public, max-age=31536000, immutable, stale-while-revalidate=604800");
+          reply.header("Vary", "Accept");
+          return reply.send(resized);
+        }
+
         reply.header("Content-Type", `image/${ext === "jpg" ? "jpeg" : ext}`);
-        reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        reply.header("Cache-Control", "public, max-age=31536000, immutable, stale-while-revalidate=604800");
+        reply.header("Vary", "Accept");
         return reply.send(buffer);
       }
     }

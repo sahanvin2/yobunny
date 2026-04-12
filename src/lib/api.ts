@@ -602,14 +602,23 @@ export async function fetchPostById(postId: string) {
   return data.item;
 }
 
-export async function createPost(payload: { title: string; content: string; file: File; visibility?: "PUBLIC" | "PRIVATE" | "UNLISTED" }) {
+export async function createPost(payload: { title: string; content: string; file?: File; externalUrl?: string; visibility?: "PUBLIC" | "PRIVATE" | "UNLISTED" }) {
+  if (!payload.file && !payload.externalUrl?.trim()) {
+    throw new Error("Attach a file or provide an external downloadable link");
+  }
+
   const formData = new FormData();
   formData.append("title", payload.title);
   formData.append("content", payload.content);
   if (payload.visibility) {
     formData.append("visibility", payload.visibility);
   }
-  formData.append("file", payload.file);
+  if (payload.externalUrl?.trim()) {
+    formData.append("externalUrl", payload.externalUrl.trim());
+  }
+  if (payload.file) {
+    formData.append("file", payload.file);
+  }
 
   const res = await fetch(`${API_BASE}/posts`, {
     method: "POST",

@@ -3,10 +3,14 @@ import { Link } from "react-router-dom";
 import VideoGrid from "@/components/video/VideoGrid";
 import { fetchAllVideos, fetchPosts, partitionVideosByFormat, type ApiPost } from "@/lib/api";
 import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const CLIPS_CAROUSEL = 80;
+const HOME_POST_LIMIT = 3;
 
 export default function HomePage() {
+  const isMobile = useIsMobile();
+  const [desktopColumns, setDesktopColumns] = useState(5);
   const [allVideos, setAllVideos] = useState<Awaited<ReturnType<typeof fetchAllVideos>>>([]);
   const [feedSplit, setFeedSplit] = useState<{ clips: Awaited<ReturnType<typeof fetchAllVideos>>; landscape: Awaited<ReturnType<typeof fetchAllVideos>> }>({ clips: [], landscape: [] });
   const [posts, setPosts] = useState<ApiPost[]>([]);
@@ -54,9 +58,9 @@ export default function HomePage() {
 
     const loadPosts = async () => {
       try {
-        const data = await fetchPosts({ page: 1, limit: 8, sort: "latest" });
+        const data = await fetchPosts({ page: 1, limit: HOME_POST_LIMIT, sort: "latest" });
         if (!cancelled) {
-          setPosts(data.items);
+          setPosts(data.items.slice(0, HOME_POST_LIMIT));
         }
       } catch {
         if (!cancelled) {
@@ -70,6 +74,25 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      const width = window.innerWidth;
+      if (width >= 1280) {
+        setDesktopColumns(5);
+      } else if (width >= 1024) {
+        setDesktopColumns(4);
+      } else if (width >= 768) {
+        setDesktopColumns(3);
+      } else {
+        setDesktopColumns(2);
+      }
+    };
+
+    updateColumns();
+    window.addEventListener("resize", updateColumns);
+    return () => window.removeEventListener("resize", updateColumns);
   }, []);
 
   const sortedVideos = useMemo(() => sortFeedVideos(allVideos, "popular"), [allVideos]);
@@ -104,27 +127,28 @@ export default function HomePage() {
     };
   }, [sortedVideos]);
 
-  const landscapeVideos = feedSplit.landscape.slice(0, 15);
-  const moreLandscapeVideos = feedSplit.landscape.slice(15);
+  const firstVideoBlockSize = isMobile ? 5 : desktopColumns * 3;
+  const landscapeVideos = feedSplit.landscape.slice(0, firstVideoBlockSize);
+  const moreLandscapeVideos = feedSplit.landscape.slice(firstVideoBlockSize);
   const clipsCarousel = feedSplit.clips.slice(0, CLIPS_CAROUSEL);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">
       <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent opacity-60 pointer-events-none -z-10 rounded-t-[3rem]" />
-      
+
       {loading && (
         <div className="flex flex-col items-center justify-center p-32 space-y-5">
-           <div className="relative w-16 h-16">
-             <div className="absolute inset-0 rounded-full border-[3px] border-white/10"></div>
-             <div className="absolute inset-0 rounded-full border-[3px] border-white border-t-transparent animate-spin"></div>
-           </div>
-           <p className="text-sm font-bold text-white/50 tracking-widest uppercase">Curating content</p>
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-[3px] border-white/10"></div>
+            <div className="absolute inset-0 rounded-full border-[3px] border-white border-t-transparent animate-spin"></div>
+          </div>
+          <p className="text-sm font-bold text-white/50 tracking-widest uppercase">Curating content</p>
         </div>
       )}
-      
+
       {error && (
         <div className="p-10 rounded-3xl bg-red-500/10 border border-red-500/20 text-center">
-            <p className="text-red-400 font-medium">{error}</p>
+          <p className="text-red-400 font-medium">{error}</p>
         </div>
       )}
 
@@ -173,11 +197,10 @@ export default function HomePage() {
             <Link to="/posts" className="text-sm text-white/70 hover:text-white">View all</Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {posts.map((post) => (
               <Link key={post.id} to={`/posts?open=${post.id}`} className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 min-h-[220px] flex flex-col">
-                <p className="text-sm text-white/60">@{post.user?.username || "creator"}</p>
-                <h3 className="text-base font-semibold text-white mt-2 line-clamp-2">{post.title}</h3>
+                <h3 className="text-base font-semibold text-white line-clamp-2">{post.title}</h3>
                 <p className="text-sm text-white/70 mt-3 line-clamp-5">{post.content}</p>
               </Link>
             ))}
@@ -195,9 +218,9 @@ export default function HomePage() {
       )}
 
       {!loading && !error && landscapeVideos.length === 0 && clipsCarousel.length === 0 && (
-         <div className="p-20 text-center">
-            <p className="text-base font-medium text-white/40">No videos available right now.</p>
-         </div>
+        <div className="p-20 text-center">
+          <p className="text-base font-medium text-white/40">No videos available right now.</p>
+        </div>
       )}
     </div>
   );

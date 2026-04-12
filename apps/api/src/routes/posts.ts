@@ -236,7 +236,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "Post not found", code: "NOT_FOUND" });
     }
 
-    if (item.fileKey.startsWith("local/")) {
+    if (item.fileKey.startsWith("local/") || item.fileKey.startsWith("external/") || /^https?:\/\//i.test(item.fileUrl)) {
       return { url: item.fileUrl };
     }
 
@@ -253,6 +253,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
     const parts = request.parts();
     let title = "";
     let content = "";
+    let externalUrl = "";
     let visibility: "PUBLIC" | "PRIVATE" | "UNLISTED" = "PUBLIC";
     let uploadPart: { buffer: Buffer; filename: string; mimetype: string } | null = null;
 
@@ -275,6 +276,8 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
         title = String(part.value || "").trim();
       } else if (part.fieldname === "content") {
         content = String(part.value || "").trim();
+      } else if (part.fieldname === "externalUrl") {
+        externalUrl = String(part.value || "").trim();
       } else if (part.fieldname === "visibility") {
         const parsedVisibility = visibilitySchema.safeParse(String(part.value || "").trim().toUpperCase());
         if (parsedVisibility.success) {
@@ -283,8 +286,53 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    if (!title || !content || !uploadPart) {
-      return reply.code(400).send({ error: "title, content and file are required", code: "VALIDATION_ERROR" });
+    if (!title || !content || (!uploadPart && !externalUrl)) {
+      return reply.code(400).send({ error: "title, content and either file or externalUrl are required", code: "VALIDATION_ERROR" });
+    }
+
+    if (externalUrl) {
+      const parsedExternalUrl = z.string().url().safeParse(externalUrl);
+      if (!parsedExternalUrl.success) {
+        return reply.code(400).send({ error: "externalUrl must be a valid URL", code: "VALIDATION_ERROR" });
+      }
+    }
+
+    if (!uploadPart && externalUrl) {
+      const parsedUrl = new URL(externalUrl);
+      const pathPart = parsedUrl.pathname.split("/").filter(Boolean).pop();
+      const fallbackName = `${parsedUrl.hostname}-resource`;
+
+      const item = await fastify.prisma.post.create({
+        data: {
+          title,
+          content,
+          fileKey: `external/${dbUser.id}/${Date.now()}`,
+          fileUrl: externalUrl,
+          fileName: pathPart || fallbackName,
+          mimeType: "application/octet-stream",
+          fileSize: BigInt(0),
+          visibility,
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+          userId: dbUser.id
+        },
+        include: {
+          user: {
+            select: {
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              isVerified: true
+            }
+          }
+        }
+      });
+
+      return { item: serializePostFileSize(item) };
+    }
+
+    if (!uploadPart) {
+      return reply.code(400).send({ error: "file is required when externalUrl is not provided", code: "VALIDATION_ERROR" });
     }
 
     const ext = (uploadPart.filename.split(".").pop() || "bin").toLowerCase();

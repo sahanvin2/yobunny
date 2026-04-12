@@ -5,11 +5,12 @@ import { VideoData, formatViewCount, formatDuration, formatRelativeTime } from "
 
 interface VideoCardProps {
   video: VideoData;
+  priority?: boolean;
 }
 
 const FALLBACK_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff";
 
-export default function VideoCard({ video }: VideoCardProps) {
+export default function VideoCard({ video, priority = false }: VideoCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
@@ -56,8 +57,11 @@ export default function VideoCard({ video }: VideoCardProps) {
               src={video.thumbnailUrl}
               alt={video.title}
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
-              loading="lazy"
+              loading={priority ? "eager" : "lazy"}
               decoding="async"
+              width={1280}
+              height={720}
+              sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 540px) 50vw, 100vw"
               onError={() => setThumbnailFailed(true)}
             />
           ) : (
@@ -89,6 +93,8 @@ export default function VideoCard({ video }: VideoCardProps) {
             className="w-10 h-10 rounded-full bg-[#111] object-cover border border-white/10 relative z-10 group-hover/avatar:scale-105 transition-transform duration-300"
             loading="lazy"
             decoding="async"
+            width={40}
+            height={40}
             onError={(event) => {
               event.currentTarget.src = FALLBACK_AVATAR;
             }}

@@ -133,6 +133,24 @@ export default function HomePage() {
   const clipsCarousel = feedSplit.clips.slice(0, CLIPS_CAROUSEL);
   const skeletonCards = Math.max(Math.min(firstVideoBlockSize, 8), 4);
 
+  useEffect(() => {
+    if (loading || error || landscapeVideos.length === 0) return;
+
+    const firstThumb = landscapeVideos[0]?.thumbnailUrl;
+    if (!firstThumb) return;
+
+    const preload = document.createElement("link");
+    preload.rel = "preload";
+    preload.as = "image";
+    preload.href = firstThumb;
+    preload.setAttribute("fetchpriority", "high");
+    document.head.appendChild(preload);
+
+    return () => {
+      preload.remove();
+    };
+  }, [landscapeVideos, loading, error]);
+
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto relative z-10">
       <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent opacity-60 pointer-events-none -z-10 rounded-t-[3rem]" />
@@ -182,10 +200,19 @@ export default function HomePage() {
           {clipsCarousel.length > 0 ? (
             <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 custom-scrollbar">
               <div className="flex gap-3 min-w-max">
-                {clipsCarousel.map((clip) => (
+                {clipsCarousel.map((clip, index) => (
                   <Link key={clip.id} to={`/clips/${clip.id}`} className="group flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-44 h-64 md:w-52 md:h-72">
                     <div className="relative w-full h-full">
-                      <img src={clip.thumbnailUrl} alt={clip.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      <img
+                        src={clip.thumbnailUrl}
+                        alt={clip.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        loading={index === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                        width={208}
+                        height={288}
+                        sizes="(min-width: 768px) 208px, 176px"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                       <div className="absolute bottom-0 left-0 right-0 p-4">
                         <p className="text-sm font-semibold text-white line-clamp-2 md:text-base leading-snug">{clip.title}</p>

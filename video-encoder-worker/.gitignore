@@ -1,0 +1,8 @@
+node_modules/
+.env
+processing/
+output_hls/
+completed/
+failed/
+logs/
+queue/

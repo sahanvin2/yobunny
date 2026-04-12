@@ -1,0 +1,22 @@
+{
+  "name": "video-encoder-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "prisma:generate": "prisma generate --schema ../apps/api/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.872.0",
+    "@prisma/client": "^6.12.0",
+    "chokidar": "^4.0.3",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.3.2",
+    "vite_react_shadcn_ts": "file:.."
+  },
+  "devDependencies": {
+    "prisma": "^6.12.0"
+  }
+}

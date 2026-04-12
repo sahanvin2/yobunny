@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, PlayCircle } from "lucide-react";
 import VideoGrid from "@/components/video/VideoGrid";
 import type { VideoData } from "@/lib/mockData";
-import { fetchHistoryVideos, fetchLikedVideos, fetchSavedVideos, isClipLikeVideo, mapApiVideoToVideoData } from "@/lib/api";
+import { API_BASE, fetchHistoryVideos, fetchLikedVideos, fetchSavedVideos, isClipLikeVideo, mapApiVideoToVideoData } from "@/lib/api";
 
 type PlaylistTab = "watchLater" | "liked" | "history" | "clips" | "longs";
 
@@ -11,14 +11,35 @@ export default function PlaylistsPage() {
   const [watchLater, setWatchLater] = useState<VideoData[]>([]);
   const [liked, setLiked] = useState<VideoData[]>([]);
   const [history, setHistory] = useState<VideoData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<PlaylistTab>("watchLater");
+  const [activeVideoId, setActiveVideoId] = useState<string>("");
 
   useEffect(() => {
-    void fetchSavedVideos().then(setWatchLater).catch(() => setWatchLater([]));
-    void fetchLikedVideos().then(setLiked).catch(() => setLiked([]));
-    void fetchHistoryVideos()
-      .then((items) => setHistory(items.map((item) => mapApiVideoToVideoData(item.video))))
-      .catch(() => setHistory([]));
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      const [savedRows, likedRows, historyRows] = await Promise.all([
+        fetchSavedVideos().catch(() => [] as VideoData[]),
+        fetchLikedVideos().catch(() => [] as VideoData[]),
+        fetchHistoryVideos()
+          .then((items) => items.map((item) => mapApiVideoToVideoData(item.video)))
+          .catch(() => [] as VideoData[])
+      ]);
+
+      if (cancelled) return;
+      setWatchLater(savedRows);
+      setLiked(likedRows);
+      setHistory(historyRows);
+      setLoading(false);
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const clips = useMemo(() => {
@@ -45,6 +66,17 @@ export default function PlaylistsPage() {
           ? clips
           : longs;
 
+  useEffect(() => {
+    if (currentVideos.length === 0) {
+      setActiveVideoId("");
+      return;
+    }
+
+    if (!activeVideoId || !currentVideos.some((item) => item.id === activeVideoId)) {
+      setActiveVideoId(currentVideos[0].id);
+    }
+  }, [activeVideoId, currentVideos]);
+
   const cards = [
     { id: "watchLater" as const, title: "Watch Later", count: watchLater.length, description: "Saved videos you want to watch next" },
     { id: "liked" as const, title: "Liked Videos", count: liked.length, description: "Videos you liked" },
@@ -53,7 +85,9 @@ export default function PlaylistsPage() {
     { id: "longs" as const, title: "My Long-form Mix", count: longs.length, description: "Long videos from your library" }
   ];
 
-  const playlistPlayer = currentVideos[0] || null;
+  const playlistPlayer = currentVideos.find((item) => item.id === activeVideoId) || currentVideos[0] || null;
+  const isActivePortrait = playlistPlayer ? isClipLikeVideo(playlistPlayer) : false;
+  const activePlaybackUrl = playlistPlayer ? (playlistPlayer.hlsBaseUrl || `${API_BASE}/videos/${playlistPlayer.id}/stream`) : "";
 
   return (
     <div className="p-4 lg:p-6 space-y-8">
@@ -77,18 +111,26 @@ export default function PlaylistsPage() {
         ))}
       </div>
 
-      {playlistPlayer && (
-        <section className="grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-6 rounded-[2rem] border border-border/60 bg-surface/70 backdrop-blur-md p-4 lg:p-5 shadow-sm">
-          <div className="rounded-[1.75rem] overflow-hidden border border-border/60 bg-black relative aspect-[9/16] lg:max-w-[420px] mx-auto w-full">
-            <video key={playlistPlayer.id} src={playlistPlayer.hlsBaseUrl} poster={playlistPlayer.thumbnailUrl} controls autoPlay muted playsInline className="w-full h-full object-cover" />
+      {loading && (
+        <div className="rounded-3xl border border-border/60 bg-surface/70 p-8 text-sm text-muted-foreground">Loading playlists...</div>
+      )}
+
+      {!loading && playlistPlayer && (
+        <section className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 rounded-[2rem] border border-border/60 bg-surface/70 backdrop-blur-md p-4 lg:p-5 shadow-sm">
+          <div className={`rounded-[1.75rem] overflow-hidden border border-border/60 bg-black relative mx-auto w-full ${isActivePortrait ? "aspect-[9/16] lg:max-w-[380px]" : "aspect-video lg:max-w-[440px]"}`}>
+            <video key={playlistPlayer.id} src={activePlaybackUrl} poster={playlistPlayer.thumbnailUrl} controls autoPlay muted playsInline className={`w-full h-full ${isActivePortrait ? "object-cover" : "object-contain"}`} />
             <div className="absolute top-3 left-3 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-              <PlayCircle size={14} /> Autoplay playlist
+              <PlayCircle size={14} /> Playlist preview
+            </div>
+            <div className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+              {isActivePortrait ? "Portrait" : "Landscape"}
             </div>
           </div>
-          <div className="space-y-4 py-2 lg:py-4">
+
+          <div className="space-y-4 py-2 lg:py-4 min-w-0">
             <div>
               <h2 className="text-xl font-semibold text-foreground">{playlistPlayer.title}</h2>
-              <p className="text-sm text-muted-foreground mt-1">Click any playlist card above to switch the active queue.</p>
+              <p className="text-sm text-muted-foreground mt-1">Switch tabs for playlist type, then click any item below to preview it here.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/watch/${playlistPlayer.id}`} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground">
@@ -102,6 +144,29 @@ export default function PlaylistsPage() {
               <p className="text-sm text-muted-foreground">Now playing</p>
               <p className="mt-1 text-sm font-medium text-foreground">{playlistPlayer.title}</p>
               <p className="text-xs text-muted-foreground mt-1">{playlistPlayer.channel.displayName} · {isClipLikeVideo(playlistPlayer) ? "Clip" : "Landscape video"}</p>
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-background/60 p-3 max-h-[360px] overflow-y-auto space-y-2">
+              {currentVideos.map((item) => {
+                const isPortrait = isClipLikeVideo(item);
+                const isActive = item.id === playlistPlayer.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveVideoId(item.id)}
+                    className={`w-full text-left rounded-xl border p-2 flex gap-3 transition-colors ${isActive ? "border-primary bg-primary/10" : "border-border/60 bg-transparent hover:bg-surface-hover"}`}
+                  >
+                    <div className={`overflow-hidden rounded-lg bg-black flex-shrink-0 ${isPortrait ? "w-14 h-24" : "w-28 h-16"}`}>
+                      <img src={item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" width={isPortrait ? 90 : 160} height={isPortrait ? 160 : 90} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground line-clamp-2">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{isPortrait ? "Portrait" : "Landscape"}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>

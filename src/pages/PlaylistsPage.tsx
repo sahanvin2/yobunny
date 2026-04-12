@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, PlayCircle } from "lucide-react";
 import VideoGrid from "@/components/video/VideoGrid";
+import HlsVideoPlayer from "@/components/video/HlsVideoPlayer";
 import type { VideoData } from "@/lib/mockData";
 import { API_BASE, fetchHistoryVideos, fetchLikedVideos, fetchSavedVideos, isClipLikeVideo, mapApiVideoToVideoData } from "@/lib/api";
 
@@ -133,7 +134,7 @@ export default function PlaylistsPage() {
       {!loading && playlistPlayer && (
         <section className="grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] gap-6 rounded-[2rem] border border-border/60 bg-surface/70 backdrop-blur-md p-4 lg:p-5 shadow-sm">
           <div className={`rounded-[1.75rem] overflow-hidden border border-border/60 bg-black relative mx-auto w-full ${isActivePortrait ? "aspect-[9/16] lg:max-w-[380px]" : "aspect-video lg:max-w-[440px]"}`}>
-            <video key={playlistPlayer.id} src={activePlaybackUrl} poster={playlistPlayer.thumbnailUrl} controls autoPlay muted playsInline preload="metadata" className={`w-full h-full ${isActivePortrait ? "object-cover" : "object-contain"}`} />
+            <HlsVideoPlayer key={playlistPlayer.id} src={activePlaybackUrl} poster={playlistPlayer.thumbnailUrl} controls autoPlay muted playsInline preload="metadata" className={`w-full h-full ${isActivePortrait ? "object-cover" : "object-contain"}`} />
             <div className="absolute top-3 left-3 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
               <PlayCircle size={14} /> Playlist preview
             </div>

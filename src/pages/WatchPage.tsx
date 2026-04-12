@@ -39,6 +39,7 @@ import {
 } from "@/lib/mockData";
 import { isAuthenticated } from "@/lib/auth";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import HlsVideoPlayer from "@/components/video/HlsVideoPlayer";
 import {
   API_BASE,
   addComment,
@@ -489,7 +490,7 @@ export default function WatchPage() {
       <div className="flex-1 min-w-0">
         <div className="relative aspect-video bg-black rounded-2xl overflow-hidden mb-4 group">
           {currentPlaybackUrl ? (
-            <video
+            <HlsVideoPlayer
               key={currentPlaybackUrl}
               ref={videoRef}
               src={currentPlaybackUrl}

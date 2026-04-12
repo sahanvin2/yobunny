@@ -6,6 +6,7 @@ import { formatRelativeTime, formatViewCount, type CommentData, type VideoData }
 import { sortShortsVideos } from "@/lib/videoFeed";
 import { isAuthenticated } from "@/lib/auth";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import HlsVideoPlayer from "@/components/video/HlsVideoPlayer";
 
 type OverlayPanel =
   | { type: "none" }
@@ -400,7 +401,7 @@ export default function ClipsPage() {
               className="min-h-[76vh] flex items-center justify-center px-2 sm:px-4"
             >
               <div className="relative w-full max-w-[360px] aspect-[9/16] rounded-2xl overflow-hidden border border-white/10 bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-                <video
+                <HlsVideoPlayer
                   ref={(node) => {
                     videoRefs.current[video.id] = node;
                   }}

@@ -7,7 +7,7 @@ import { config, allowedExtensions } from "./config.js";
 import { QueueManager } from "./queueManager.js";
 import { encodeToHls } from "./ffmpeg.js";
 import { createB2Client, uploadDirectory, uploadFile } from "./b2.js";
-import { createVideoWithQualities, resolveUploaderUserId, shutdownDb } from "./db.js";
+import { createVideoWithQualities, resolveUploaderUserId, shutdownDb, videoExistsByTitle } from "./db.js";
 
 const queue = new QueueManager(config.queueFile);
 const env = {
@@ -100,6 +100,14 @@ async function processOneJob(job) {
   const outputJobRoot = path.join(config.outputDir, job.id);
   await fs.remove(outputJobRoot);
   await fs.ensureDir(outputJobRoot);
+
+  const existingTitle = getVideoTitle(workingPath);
+  if (await videoExistsByTitle(existingTitle)) {
+    await queue.complete(job.id);
+    logLine(logStream, `JOB SKIPPED EXISTING | id=${job.id} | title=${existingTitle}`);
+    logStream.end();
+    return;
+  }
 
   try {
     const encoderResult = await encodeToHls({

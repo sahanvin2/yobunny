@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import fs from "fs-extra";
 import path from "node:path";
 
@@ -25,15 +26,32 @@ export function createB2Client(env) {
 }
 
 export async function uploadFile(client, env, localPath, remoteKey) {
-  const body = fs.createReadStream(localPath);
-  await client.send(
-    new PutObjectCommand({
-      Bucket: env.B2_BUCKET,
-      Key: remoteKey,
-      Body: body,
-      ContentType: contentTypeForFile(localPath)
-    })
-  );
+  const stat = await fs.stat(localPath);
+  const contentType = contentTypeForFile(localPath);
+
+  if (stat.size >= 64 * 1024 * 1024) {
+    await new Upload({
+      client,
+      params: {
+        Bucket: env.B2_BUCKET,
+        Key: remoteKey,
+        Body: fs.createReadStream(localPath),
+        ContentType: contentType
+      },
+      queueSize: 4,
+      partSize: 64 * 1024 * 1024,
+      leavePartsOnError: false
+    }).done();
+  } else {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: env.B2_BUCKET,
+        Key: remoteKey,
+        Body: fs.createReadStream(localPath),
+        ContentType: contentType
+      })
+    );
+  }
   return `${env.B2_PUBLIC_BASE.replace(/\/$/, "")}/${remoteKey}`;
 }
 

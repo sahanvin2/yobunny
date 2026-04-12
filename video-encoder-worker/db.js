@@ -53,6 +53,13 @@ export async function createVideoWithQualities({
   });
 }
 
+export async function videoExistsByTitle(title) {
+  const video = await prisma.video.findFirst({
+    where: { title }
+  });
+  return Boolean(video);
+}
+
 export async function shutdownDb() {
   await prisma.$disconnect();
 }

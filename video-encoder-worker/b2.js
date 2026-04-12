@@ -58,6 +58,7 @@ export async function uploadFile(client, env, localPath, remoteKey) {
 export async function uploadDirectory(client, env, localRoot, remoteRoot) {
   const files = await fs.readdir(localRoot, { recursive: true });
   const uploaded = [];
+  const fileEntries = [];
 
   for (const entry of files) {
     const localPath = path.join(localRoot, entry.toString());
@@ -65,9 +66,23 @@ export async function uploadDirectory(client, env, localRoot, remoteRoot) {
     if (!stat.isFile()) continue;
     const rel = path.relative(localRoot, localPath).replace(/\\/g, "/");
     const key = `${remoteRoot.replace(/\/$/, "")}/${rel}`;
-    const publicUrl = await uploadFile(client, env, localPath, key);
-    uploaded.push({ localPath, rel, key, publicUrl, size: stat.size });
+    fileEntries.push({ localPath, rel, key, size: stat.size });
   }
+
+  const concurrency = 8;
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, fileEntries.length) }, async () => {
+      while (cursor < fileEntries.length) {
+        const index = cursor;
+        cursor += 1;
+        const item = fileEntries[index];
+        const publicUrl = await uploadFile(client, env, item.localPath, item.key);
+        uploaded.push({ ...item, publicUrl });
+      }
+    })
+  );
 
   return uploaded;
 }

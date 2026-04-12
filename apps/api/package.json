@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "reconcile:orientation": "node scripts/reconcile-video-orientation.mjs",
+    "reconcile:orientation:apply": "node scripts/reconcile-video-orientation.mjs --apply"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.872.0",
@@ -24,6 +26,7 @@
     "fastify-plugin": "^5.0.1",
     "ffmpeg-static": "^5.3.0",
     "firebase-admin": "^13.0.1",
+    "image-size": "^1.1.1",
     "ioredis": "^5.4.1",
     "vite_react_shadcn_ts": "file:../..",
     "zod": "^3.23.8"

@@ -88,7 +88,7 @@ function hasPortraitTag(video: VideoData): boolean {
 }
 
 export function isClipLikeVideo(video: VideoData): boolean {
-  return isAutoClipVideo(video) || hasPortraitTag(video) || Boolean(video.duration > 0 && video.duration <= 60);
+  return isAutoClipVideo(video) || hasPortraitTag(video);
 }
 
 const orientationCache = new Map<string, boolean>();
@@ -114,7 +114,7 @@ async function detectPortraitFromThumbnail(video: VideoData): Promise<boolean> {
 
 function hasClipTag(video: VideoData): boolean {
   const tags = video.tags.map((tag) => tag.toLowerCase());
-  return tags.includes(AUTO_CLIP_TAG.toLowerCase()) || tags.includes("__portrait__") || tags.includes("portrait") || tags.includes("short") || tags.includes("shorts") || tags.includes("clip") || tags.includes("clips");
+  return tags.includes(AUTO_CLIP_TAG.toLowerCase()) || tags.includes("__portrait__") || tags.includes("portrait");
 }
 
 export async function partitionVideosByFormat(videos: VideoData[]) {

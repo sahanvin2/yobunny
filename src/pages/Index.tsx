@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import VideoGrid from "@/components/video/VideoGrid";
-import { fetchAllVideos, fetchPosts, type ApiPost } from "@/lib/api";
+import { fetchAllVideos, fetchPosts, partitionVideosByFormat, type ApiPost } from "@/lib/api";
 import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
 
-const LANDSCAPE_ROWS = 12;
 const CLIPS_CAROUSEL = 80;
 
 export default function HomePage() {
   const [allVideos, setAllVideos] = useState<Awaited<ReturnType<typeof fetchAllVideos>>>([]);
+  const [feedSplit, setFeedSplit] = useState<{ clips: Awaited<ReturnType<typeof fetchAllVideos>>; landscape: Awaited<ReturnType<typeof fetchAllVideos>> }>({ clips: [], landscape: [] });
   const [posts, setPosts] = useState<ApiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -73,10 +73,40 @@ export default function HomePage() {
   }, []);
 
   const sortedVideos = useMemo(() => sortFeedVideos(allVideos, "popular"), [allVideos]);
-  const { clips, landscape } = useMemo(() => splitFeedVideos(sortedVideos), [sortedVideos]);
-  const landscapeVideos = landscape.slice(0, 15);
-  const moreLandscapeVideos = landscape.slice(15);
-  const clipsCarousel = clips.slice(0, CLIPS_CAROUSEL);
+
+  useEffect(() => {
+    let cancelled = false;
+    const baseSplit = splitFeedVideos(sortedVideos);
+
+    setFeedSplit(baseSplit);
+
+    if (baseSplit.clips.length > 0 || sortedVideos.length === 0) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const detectByThumbnail = async () => {
+      try {
+        const { clips, regularVideos } = await partitionVideosByFormat(sortedVideos);
+        if (!cancelled) {
+          setFeedSplit({ clips, landscape: regularVideos });
+        }
+      } catch {
+        // Keep tag-based split if thumbnail detection fails.
+      }
+    };
+
+    void detectByThumbnail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sortedVideos]);
+
+  const landscapeVideos = feedSplit.landscape.slice(0, 15);
+  const moreLandscapeVideos = feedSplit.landscape.slice(15);
+  const clipsCarousel = feedSplit.clips.slice(0, CLIPS_CAROUSEL);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">
@@ -107,26 +137,32 @@ export default function HomePage() {
         </div>
       )}
 
-      {!loading && !error && clipsCarousel.length > 0 && (
+      {!loading && !error && (
         <div className="space-y-6 pt-8">
           <div>
             <h2 className="text-2xl font-bold text-white mb-4">Trending Clips</h2>
           </div>
-          <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 custom-scrollbar">
-            <div className="flex gap-3 min-w-max">
-              {clipsCarousel.map((clip) => (
-                <Link key={clip.id} to={`/clips/${clip.id}`} className="group flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-44 h-64 md:w-52 md:h-72">
-                  <div className="relative w-full h-full">
-                    <img src={clip.thumbnailUrl} alt={clip.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <p className="text-sm font-semibold text-white line-clamp-2 md:text-base leading-snug">{clip.title}</p>
+          {clipsCarousel.length > 0 ? (
+            <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 custom-scrollbar">
+              <div className="flex gap-3 min-w-max">
+                {clipsCarousel.map((clip) => (
+                  <Link key={clip.id} to={`/clips/${clip.id}`} className="group flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-44 h-64 md:w-52 md:h-72">
+                    <div className="relative w-full h-full">
+                      <img src={clip.thumbnailUrl} alt={clip.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 p-4">
+                        <p className="text-sm font-semibold text-white line-clamp-2 md:text-base leading-snug">{clip.title}</p>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
+              No clips detected yet. Upload portrait videos or add the __portrait__ tag to surface clips here.
+            </div>
+          )}
         </div>
       )}
 

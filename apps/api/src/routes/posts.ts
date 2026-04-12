@@ -15,6 +15,13 @@ const postCommentSchema = z.object({
   body: z.string().min(1).max(2000)
 });
 
+function serializePostFileSize<T extends { fileSize: bigint | number | string }>(post: T): Omit<T, "fileSize"> & { fileSize: string | number } {
+  return {
+    ...post,
+    fileSize: typeof post.fileSize === "bigint" ? post.fileSize.toString() : post.fileSize
+  };
+}
+
 const postsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", async (request, reply) => {
     const parsed = paginationSchema.safeParse(request.query);
@@ -51,7 +58,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
     ]);
 
     reply.header("Cache-Control", "public, max-age=120");
-    return { items, pagination: { page, limit, total } };
+    return { items: items.map(serializePostFileSize), pagination: { page, limit, total } };
   });
 
   fastify.get("/my", { preHandler: requireAuth }, async (request) => {
@@ -68,7 +75,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: "desc" }
     });
 
-    return { items };
+    return { items: items.map(serializePostFileSize) };
   });
 
   fastify.get("/:id", async (request, reply) => {
@@ -96,7 +103,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
       data: { viewCount: { increment: 1 } }
     }).catch(() => undefined);
 
-    return { item };
+    return { item: serializePostFileSize(item) };
   });
 
   fastify.get("/:id/comments", async (request, reply) => {
@@ -321,7 +328,7 @@ const postsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       });
 
-      return { item };
+      return { item: serializePostFileSize(item) };
     } catch (error) {
       await fastify.prisma.post.update({
         where: { id: created.id },

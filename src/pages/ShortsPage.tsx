@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
-import { fetchVideos, partitionVideosByFormat, toggleLike, toggleSave } from "@/lib/api";
-import { formatRelativeTime, formatViewCount, type VideoData } from "@/lib/mockData";
+import { Bookmark, Facebook, Heart, Link as LinkIcon, MessageCircle, MoreVertical, Share2, Twitter, X } from "lucide-react";
+import { API_BASE, addComment, fetchVideoComments, fetchVideos, isClipLikeVideo, partitionVideosByFormat, toggleLike, toggleSave } from "@/lib/api";
+import { formatRelativeTime, formatViewCount, type CommentData, type VideoData } from "@/lib/mockData";
 import { sortShortsVideos } from "@/lib/videoFeed";
 import { isAuthenticated } from "@/lib/auth";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+
+type OverlayPanel =
+  | { type: "none" }
+  | { type: "comments"; videoId: string }
+  | { type: "share"; videoId: string }
+  | { type: "more"; videoId: string };
 
 export default function ShortsPage() {
   const { id } = useParams();
@@ -29,6 +35,11 @@ export default function ShortsPage() {
   const [activeVideoId, setActiveVideoId] = useState<string>(id || "");
   const [likedById, setLikedById] = useState<Record<string, boolean>>({});
   const [savedById, setSavedById] = useState<Record<string, boolean>>({});
+  const [commentsById, setCommentsById] = useState<Record<string, CommentData[]>>({});
+  const [commentInputById, setCommentInputById] = useState<Record<string, string>>({});
+  const [sourceById, setSourceById] = useState<Record<string, string>>({});
+  const [fallbackTriedById, setFallbackTriedById] = useState<Record<string, boolean>>({});
+  const [panel, setPanel] = useState<OverlayPanel>({ type: "none" });
   const [playerReady, setPlayerReady] = useState(!Boolean(id));
 
   const isPlayerMode = Boolean(id);
@@ -48,7 +59,10 @@ export default function ShortsPage() {
         limit: PAGE_SIZE
       });
 
-      const { clips: portraitItems } = await partitionVideosByFormat(items);
+      const tagBasedPortraits = items.filter((item) => isClipLikeVideo(item));
+      const portraitItems = tagBasedPortraits.length > 0
+        ? tagBasedPortraits
+        : (await partitionVideosByFormat(items)).clips;
       const cleanPortraits = portraitItems.filter((item) => Boolean(item.hlsBaseUrl));
 
       setClips((prev) => {
@@ -60,6 +74,17 @@ export default function ShortsPage() {
           merged.push(item);
           seen.add(item.id);
         }
+
+        setSourceById((prevSources) => {
+          const nextSources = { ...prevSources };
+          for (const item of cleanPortraits) {
+            if (!nextSources[item.id] && item.hlsBaseUrl) {
+              nextSources[item.id] = item.hlsBaseUrl;
+            }
+          }
+          return nextSources;
+        });
+
         return sortShortsVideos(merged);
       });
 
@@ -173,6 +198,9 @@ export default function ShortsPage() {
           const videoEl = videoRefs.current[videoId];
           if (entry.isIntersecting && entry.intersectionRatio >= 0.72) {
             setActiveVideoId(videoId);
+            if (id !== videoId) {
+              navigate(`/shorts/${videoId}`, { replace: true });
+            }
             if (videoEl) {
               void videoEl.play().catch(() => undefined);
             }
@@ -192,7 +220,7 @@ export default function ShortsPage() {
     });
 
     return () => observer.disconnect();
-  }, [clips, isPlayerMode]);
+  }, [clips, id, isPlayerMode, navigate]);
 
   const onShare = useCallback(async (videoId: string) => {
     const url = `${window.location.origin}/shorts/${videoId}`;
@@ -205,6 +233,28 @@ export default function ShortsPage() {
       window.setTimeout(() => setStatus(""), 1200);
     }
   }, []);
+
+  const openShare = useCallback((videoId: string) => {
+    setPanel({ type: "share", videoId });
+  }, []);
+
+  const openMore = useCallback((videoId: string) => {
+    setPanel({ type: "more", videoId });
+  }, []);
+
+  const openComments = useCallback(async (videoId: string) => {
+    setPanel({ type: "comments", videoId });
+    if (commentsById[videoId]) return;
+
+    try {
+      const rows = await fetchVideoComments(videoId);
+      setCommentsById((prev) => ({ ...prev, [videoId]: rows }));
+    } catch {
+      setCommentsById((prev) => ({ ...prev, [videoId]: [] }));
+      setStatus("Failed to load comments");
+      window.setTimeout(() => setStatus(""), 1200);
+    }
+  }, [commentsById]);
 
   const onLike = useCallback(async (videoId: string) => {
     if (!isAuthenticated()) {
@@ -238,9 +288,47 @@ export default function ShortsPage() {
     }
   }, [openAuthModal]);
 
-  const onComments = useCallback(() => {
-    setStatus("Comments panel coming soon");
-    window.setTimeout(() => setStatus(""), 1200);
+  const onSubmitComment = useCallback(async (videoId: string) => {
+    if (!isAuthenticated()) {
+      openAuthModal(window.location.pathname + window.location.search);
+      return;
+    }
+
+    const body = (commentInputById[videoId] || "").trim();
+    if (!body) return;
+
+    try {
+      await addComment(videoId, body);
+      const rows = await fetchVideoComments(videoId);
+      setCommentsById((prev) => ({ ...prev, [videoId]: rows }));
+      setCommentInputById((prev) => ({ ...prev, [videoId]: "" }));
+      setStatus("Comment posted");
+      window.setTimeout(() => setStatus(""), 1200);
+    } catch {
+      setStatus("Comment failed");
+      window.setTimeout(() => setStatus(""), 1200);
+    }
+  }, [commentInputById, openAuthModal]);
+
+  const onVideoError = useCallback((videoId: string) => {
+    if (fallbackTriedById[videoId]) {
+      setStatus("Playback unavailable");
+      window.setTimeout(() => setStatus(""), 1500);
+      return;
+    }
+
+    setFallbackTriedById((prev) => ({ ...prev, [videoId]: true }));
+    setSourceById((prev) => ({ ...prev, [videoId]: `${API_BASE}/videos/${videoId}/playable` }));
+  }, [fallbackTriedById]);
+
+  const onTogglePlay = useCallback((videoId: string) => {
+    const videoEl = videoRefs.current[videoId];
+    if (!videoEl) return;
+    if (videoEl.paused) {
+      void videoEl.play().catch(() => undefined);
+    } else {
+      videoEl.pause();
+    }
   }, []);
 
   const shorts = useMemo(() => clips.filter((item) => Boolean(item.hlsBaseUrl)), [clips]);
@@ -318,15 +406,24 @@ export default function ShortsPage() {
                   ref={(node) => {
                     videoRefs.current[video.id] = node;
                   }}
-                  src={video.hlsBaseUrl}
+                  src={sourceById[video.id] || video.hlsBaseUrl}
                   poster={video.thumbnailUrl}
-                  controls={isActive}
+                  controls={false}
                   autoPlay={isActive}
                   muted
                   playsInline
-                  preload="metadata"
+                  preload={isActive ? "auto" : "metadata"}
+                  onClick={() => onTogglePlay(video.id)}
+                  onError={() => onVideoError(video.id)}
                   className="w-full h-full object-cover"
                 />
+
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/70 via-transparent to-black/80" />
+
+                <div className="absolute top-0 inset-x-0 p-4 pointer-events-none">
+                  <p className="text-sm font-semibold text-white/95 truncate">@{video.channel.username}</p>
+                  <p className="text-sm md:text-base font-medium text-white mt-1 line-clamp-2 [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">{video.title}</p>
+                </div>
 
                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
                   <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white">
@@ -353,11 +450,14 @@ export default function ShortsPage() {
                   >
                     <Bookmark size={18} />
                   </button>
-                  <button type="button" onClick={() => void onShare(video.id)} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 hover:bg-black/60 inline-flex items-center justify-center" title="Share">
+                  <button type="button" onClick={() => openShare(video.id)} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 hover:bg-black/60 inline-flex items-center justify-center" title="Share">
                     <Share2 size={18} />
                   </button>
-                  <button type="button" onClick={onComments} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 inline-flex items-center justify-center hover:bg-black/60" title="Comments">
+                  <button type="button" onClick={() => void openComments(video.id)} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 inline-flex items-center justify-center hover:bg-black/60" title="Comments">
                     <MessageCircle size={18} />
+                  </button>
+                  <button type="button" onClick={() => openMore(video.id)} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 inline-flex items-center justify-center hover:bg-black/60" title="More">
+                    <MoreVertical size={18} />
                   </button>
                 </aside>
               </div>
@@ -377,6 +477,93 @@ export default function ShortsPage() {
           </button>
         </div>
         {status && <p className="fixed bottom-8 left-1/2 -translate-x-1/2 text-xs bg-black/70 px-3 py-2 rounded-full border border-white/15">{status}</p>}
+
+        {panel.type !== "none" && (
+          <div className="fixed inset-0 z-50 bg-black/70" onClick={() => setPanel({ type: "none" })}>
+            <div className="absolute inset-x-0 bottom-0 max-h-[72vh] rounded-t-3xl border border-white/10 bg-[#0d0d0d] p-4 overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-white">
+                  {panel.type === "comments" ? "Comments" : panel.type === "share" ? "Share" : "More"}
+                </h3>
+                <button type="button" className="h-8 w-8 rounded-full bg-white/10 inline-flex items-center justify-center" onClick={() => setPanel({ type: "none" })}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              {panel.type === "comments" && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={commentInputById[panel.videoId] || ""}
+                      onChange={(event) => setCommentInputById((prev) => ({ ...prev, [panel.videoId]: event.target.value }))}
+                      placeholder="Add a comment"
+                      className="flex-1 h-10 px-3 rounded-xl border border-white/15 bg-black/40 text-sm text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void onSubmitComment(panel.videoId)}
+                      className="h-10 px-4 rounded-xl bg-white text-black text-sm font-semibold"
+                    >
+                      Post
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(commentsById[panel.videoId] || []).map((comment) => (
+                      <div key={comment.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-sm text-white/90">{comment.body}</p>
+                        <p className="text-xs text-white/50 mt-1">@{comment.user.username} • {formatRelativeTime(comment.createdAt)}</p>
+                      </div>
+                    ))}
+                    {(commentsById[panel.videoId] || []).length === 0 && (
+                      <p className="text-sm text-white/60">No comments yet.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {panel.type === "share" && (
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <a
+                      href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin + "/shorts/" + panel.videoId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-11 h-11 rounded-full bg-blue-600 text-white inline-flex items-center justify-center"
+                    >
+                      <Facebook size={18} />
+                    </a>
+                    <a
+                      href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.origin + "/shorts/" + panel.videoId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-11 h-11 rounded-full bg-black text-white inline-flex items-center justify-center border border-white/20"
+                    >
+                      <Twitter size={18} />
+                    </a>
+                    <button type="button" onClick={() => void onShare(panel.videoId)} className="w-11 h-11 rounded-full bg-white/10 text-white inline-flex items-center justify-center border border-white/20">
+                      <LinkIcon size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {panel.type === "more" && (
+                <div className="space-y-2">
+                  <button type="button" className="w-full h-10 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90" onClick={() => { setStatus("Added to watch later"); setPanel({ type: "none" }); window.setTimeout(() => setStatus(""), 1200); }}>
+                    Add to watch later
+                  </button>
+                  <button type="button" className="w-full h-10 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90" onClick={() => { setStatus("We will show less like this"); setPanel({ type: "none" }); window.setTimeout(() => setStatus(""), 1200); }}>
+                    Not interested
+                  </button>
+                  <button type="button" className="w-full h-10 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90" onClick={() => { setStatus("Reported"); setPanel({ type: "none" }); window.setTimeout(() => setStatus(""), 1200); }}>
+                    Report
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

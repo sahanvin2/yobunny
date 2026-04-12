@@ -80,7 +80,8 @@ Both frontend and backend use `.env` files:
 - `DEV_AUTH_BYPASS`: Skip Firebase auth for development
 
 **Frontend** (`.env`):
-- `NEXT_PUBLIC_API_URL`: Backend API URL
+- `VITE_API_URL`: Backend API URL (recommended for Vite)
+- `NEXT_PUBLIC_API_URL`: Backward-compatible alias
 - `NEXT_PUBLIC_CDN_URL`: CDN for video streaming
 
 ## Common Commands

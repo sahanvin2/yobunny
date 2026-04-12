@@ -48,42 +48,44 @@ export default function VideoCard({ video }: VideoCardProps) {
   };
 
   return (
-    <div className="relative group/card animate-fade-in">
+    <div className="relative group/card animate-fade-in transition-all duration-500 hover:-translate-y-2 hover:z-10">
       <Link to={`/watch/${video.id}`} className="group block">
-        <div className="relative aspect-video rounded-2xl overflow-hidden bg-surface mb-3">
+        <div className="relative aspect-video rounded-[1.5rem] overflow-hidden bg-[#111] mb-4 border border-white/5 shadow-lg group-hover/card:shadow-[0_20px_50px_rgba(0,0,0,0.5)] group-hover/card:border-white/10 transition-all duration-500">
           {!thumbnailFailed ? (
             <img
               src={video.thumbnailUrl}
               alt={video.title}
-              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
               loading="lazy"
               onError={() => setThumbnailFailed(true)}
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-surface to-background flex items-center justify-center text-xs text-muted-foreground">
+            <div className="w-full h-full bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] flex items-center justify-center text-[10px] uppercase tracking-widest text-white/30 font-bold">
               Thumbnail unavailable
             </div>
           )}
-          <div className="absolute inset-0 bg-background/0 group-hover:bg-background/20 transition-colors flex items-center justify-center">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="w-12 h-12 rounded-full bg-background/80 flex items-center justify-center">
-                <Play size={20} className="text-foreground ml-0.5" fill="currentColor" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none" />
+          <div className="absolute inset-0 bg-transparent flex items-center justify-center pointer-events-none">
+            <div className="opacity-0 group-hover/card:opacity-100 transition-all duration-500 transform translate-y-4 group-hover/card:translate-y-0">
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-xl border border-white/30 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <Play size={24} className="text-white ml-1" fill="currentColor" />
               </div>
             </div>
           </div>
-          <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground flex items-center gap-1">
+          <span className="absolute bottom-3 right-3 px-2 py-1 rounded-lg text-[10px] font-bold bg-black/60 text-white backdrop-blur-md flex items-center gap-1 shadow-sm opacity-100 group-hover/card:opacity-0 transition-opacity duration-300">
             <Clock size={12} />
             {formatDuration(video.duration)}
           </span>
         </div>
       </Link>
       
-      <div className="flex gap-3 relative">
-        <Link to={`/channel/${video.channel.username}`} className="flex-shrink-0">
+      <div className="flex gap-3 relative px-1">
+        <Link to={`/channel/${video.channel.username}`} className="flex-shrink-0 relative group/avatar z-10">
+          <div className="absolute inset-0 bg-primary/20 blur-md rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-500" />
           <img
             src={video.channel.avatarUrl}
             alt={video.channel.displayName}
-            className="w-9 h-9 rounded-full bg-surface object-cover"
+            className="w-10 h-10 rounded-full bg-[#111] object-cover border border-white/10 relative z-10 group-hover/avatar:scale-105 transition-transform duration-300"
             loading="lazy"
             decoding="async"
             onError={(event) => {
@@ -91,19 +93,21 @@ export default function VideoCard({ video }: VideoCardProps) {
             }}
           />
         </Link>
-        <Link to={`/watch/${video.id}`} className="flex-1 min-w-0 pr-6 group-hover/card:underline decoration-transparent hover:decoration-foreground">
-          <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-5">
+        <Link to={`/watch/${video.id}`} className="flex-1 min-w-0 pr-6 group-hover/card:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">
+          <h3 className="text-[15px] font-bold text-white line-clamp-2 leading-[1.3] tracking-tight group-hover/card:text-white/90">
             {video.title}
           </h3>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-[13px] font-medium text-white/50 mt-1 hover:text-white/80 transition-colors inline-block">
             {video.channel.displayName}
             {video.channel.isVerified && (
-              <span className="ml-1 text-text-tertiary">✓</span>
+              <span className="ml-1 text-white/40">✓</span>
             )}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {formatViewCount(video.viewCount)} views · {formatRelativeTime(video.publishedAt)}
-          </p>
+          <div className="flex items-center gap-1 mt-0.5 text-[11px] font-bold tracking-widest uppercase text-white/40">
+            <span>{formatViewCount(video.viewCount)} views</span>
+            <span className="w-1 h-1 rounded-full bg-white/20 mx-1" />
+            <span>{formatRelativeTime(video.publishedAt)}</span>
+          </div>
         </Link>
 
         <div ref={menuRef} className="absolute top-0 right-0 z-20">

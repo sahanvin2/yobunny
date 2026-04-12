@@ -165,6 +165,7 @@ export default function UploadPage() {
   };
 
   const handleFile = async (next: File) => {
+    if (uploading) return;
     if (!next.type.startsWith("video/")) {
       setError("Please select a valid video file.");
       return;
@@ -316,11 +317,13 @@ export default function UploadPage() {
         </div>
         <div
           onDragOver={(e) => {
+            if (uploading) return;
             e.preventDefault();
             setDragOver(true);
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
+            if (uploading) return;
             e.preventDefault();
             setDragOver(false);
             if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
@@ -328,7 +331,10 @@ export default function UploadPage() {
           className={`group relative overflow-hidden rounded-[2rem] border-2 border-dashed p-16 text-center transition-all duration-500 cursor-pointer ${
             dragOver ? "border-primary bg-primary/10 shadow-[0_0_40px_rgba(255,255,255,0.1)] scale-[1.02]" : "border-white/10 hover:border-white/30 bg-white/[0.02] hover:bg-white/[0.04] shadow-2xl"
           }`}
-          onClick={() => document.getElementById("upload-file-input")?.click()}
+          onClick={() => {
+            if (uploading) return;
+            document.getElementById("upload-file-input")?.click();
+          }}
         >
           {/* Subtle animated gradient background when hovering */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
@@ -343,12 +349,13 @@ export default function UploadPage() {
             <button className="px-8 py-3.5 rounded-full bg-white text-black font-semibold text-sm hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
               Select video file
             </button>
-            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">Supported: MP4, WebM, MOV • Max 10GB</p>
+            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">One video at a time • Supported: MP4, WebM, MOV • Max 10GB</p>
           </div>
           <input
             id="upload-file-input"
             type="file"
             accept="video/*"
+            disabled={uploading}
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />

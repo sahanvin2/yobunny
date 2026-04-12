@@ -11,6 +11,9 @@ export interface VideoData {
   hlsBaseUrl?: string;
   duration: number;
   viewCount: number;
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
   publishedAt: string;
   channel: {
     username: string;

@@ -49,8 +49,8 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`hidden lg:flex flex-col fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border z-40 transition-all duration-200 ${
-        collapsed ? "w-[72px]" : "w-[220px]"
+      className={`hidden lg:flex flex-col fixed left-0 top-0 h-full bg-black/40 backdrop-blur-[40px] border-r border-white/[0.05] z-40 transition-all duration-300 shadow-[20px_0_40px_rgba(0,0,0,0.3)] ${
+        collapsed ? "w-[72px]" : "w-[240px]"
       }`}
     >
       <div className="flex items-center justify-between h-[60px] px-4 gap-2">
@@ -77,10 +77,10 @@ export default function Sidebar() {
             <div className="space-y-0.5">
               {section.items.map(({ icon: Icon, label, path, protected: isProtected }) => {
                 const active = location.pathname === path;
-                const className = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                const className = `flex items-center gap-4 px-4 py-3 rounded-2xl text-[14px] font-bold tracking-wide transition-all duration-300 ${
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/[0.05] translate-x-1"
+                    : "text-white/50 hover:bg-white/[0.03] hover:text-white/90 hover:translate-x-1 border border-transparent"
                 }`;
 
                 if (isProtected) {

@@ -1,13 +1,32 @@
 import { useSearchParams, Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatViewCount, formatDuration, formatRelativeTime, type VideoData } from "@/lib/mockData";
 import { fetchSearchChannels, fetchSearchVideos } from "@/lib/api";
+
+function normalize(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function scoreMatch(haystack: string, query: string) {
+  const normalizedHaystack = normalize(haystack);
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) return 0;
+  if (normalizedHaystack === normalizedQuery) return 200;
+  if (normalizedHaystack.startsWith(normalizedQuery)) return 150;
+  if (normalizedHaystack.includes(normalizedQuery)) return 100;
+
+  let score = 0;
+  for (const token of normalizedQuery.split(/\s+/).filter(Boolean)) {
+    if (normalizedHaystack.startsWith(token)) score += 20;
+    else if (normalizedHaystack.includes(token)) score += 10;
+  }
+  return score;
+}
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
   const [query, setQuery] = useState(initialQuery);
-  const [sort, setSort] = useState("relevance");
   const [type, setType] = useState<"videos" | "channels">("videos");
   const [videoResults, setVideoResults] = useState<VideoData[]>([]);
   const [channelResults, setChannelResults] = useState<Array<{ username: string; displayName: string; avatarUrl: string | null; subscriberCount: number; isVerified?: boolean }>>([]);
@@ -27,12 +46,21 @@ export default function SearchPage() {
         setLoading(true);
         setError("");
         const [videos, channels] = await Promise.all([
-          fetchSearchVideos(query, sort as "relevance" | "views" | "date"),
+          fetchSearchVideos(query, "relevance"),
           fetchSearchChannels(query)
         ]);
         if (!cancelled) {
-          setVideoResults(videos);
-          setChannelResults(channels);
+          const rankedVideos = videos
+            .filter((video) => scoreMatch([video.title, video.channel.displayName, video.channel.username, ...(video.tags || [])].join(" "), query) > 0)
+            .sort((a, b) => scoreMatch([b.title, b.channel.displayName, b.channel.username, ...(b.tags || [])].join(" "), query) - scoreMatch([a.title, a.channel.displayName, a.channel.username, ...(a.tags || [])].join(" "), query))
+            .slice(0, 24);
+          const rankedChannels = channels
+            .filter((channel) => scoreMatch([channel.displayName, channel.username].join(" "), query) > 0)
+            .sort((a, b) => scoreMatch([b.displayName, b.username].join(" "), query) - scoreMatch([a.displayName, a.username].join(" "), query))
+            .slice(0, 24);
+
+          setVideoResults(rankedVideos);
+          setChannelResults(rankedChannels);
         }
       } catch (err) {
         if (!cancelled) {
@@ -47,28 +75,30 @@ export default function SearchPage() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [query, sort]);
+  }, [query]);
+
+  const visibleVideoResults = useMemo(() => videoResults.slice(0, 24), [videoResults]);
+  const visibleChannelResults = useMemo(() => channelResults.slice(0, 24), [channelResults]);
 
   return (
-    <div className="p-4 lg:p-6 max-w-4xl">
-      <div className="flex gap-3 mb-6">
+    <div className="p-4 lg:p-6 max-w-5xl space-y-6">
+      <section className="rounded-[2rem] border border-border/60 bg-gradient-to-br from-surface via-background to-background p-5 lg:p-6 shadow-sm">
+        <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">Search</h1>
+        <p className="text-sm text-muted-foreground mt-1">Type a video title, creator name, channel handle, or tag. Results are ranked to favor exact matches first.</p>
+      </section>
+
+      <div className="flex gap-3">
         <input
           type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder="Search videos, channels, tags..."
           className="flex-1 h-10 px-4 rounded-full bg-surface border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           autoFocus
         />
-        <select value={sort} onChange={(e) => setSort(e.target.value)}
-          className="h-10 px-4 rounded-full bg-surface border border-border text-foreground text-sm focus:outline-none">
-          <option value="relevance">Relevance</option>
-          <option value="views">Most views</option>
-          <option value="date">Newest</option>
-        </select>
       </div>
 
       <div className="flex items-center justify-between mb-4 gap-3">
         <p className="text-sm text-muted-foreground">
-          {type === "videos" ? videoResults.length : channelResults.length} results{query && ` for "${query}"`}
+          {type === "videos" ? visibleVideoResults.length : visibleChannelResults.length} results{query && ` for "${query}"`}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -90,9 +120,9 @@ export default function SearchPage() {
         {loading && <p className="text-sm text-muted-foreground">Searching...</p>}
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        {type === "videos" && videoResults.map((v) => (
-          <Link key={v.id} to={`/watch/${v.id}`} className="flex gap-4 group">
-            <div className="relative w-64 aspect-video rounded-lg overflow-hidden bg-surface flex-shrink-0">
+        {type === "videos" && visibleVideoResults.map((v) => (
+          <Link key={v.id} to={`/watch/${v.id}`} className="flex gap-4 group rounded-2xl p-2 hover:bg-surface transition-colors">
+            <div className="relative w-56 sm:w-64 aspect-video rounded-2xl overflow-hidden bg-surface flex-shrink-0 border border-border/60">
               <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" />
               <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground">
                 {formatDuration(v.duration)}
@@ -111,9 +141,9 @@ export default function SearchPage() {
           </Link>
         ))}
 
-        {type === "channels" && channelResults.map((channel) => (
-          <Link key={channel.username} to={`/channel/${channel.username}`} className="flex items-center gap-4 p-3 rounded-xl bg-surface hover:bg-surface-hover transition-colors">
-            <img src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} alt={channel.displayName} className="w-14 h-14 rounded-full bg-background" />
+        {type === "channels" && visibleChannelResults.map((channel) => (
+          <Link key={channel.username} to={`/channel/${channel.username}`} className="flex items-center gap-4 p-3 rounded-2xl bg-surface hover:bg-surface-hover transition-colors border border-border/60">
+            <img src={channel.avatarUrl || "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff"} alt={channel.displayName} className="w-14 h-14 rounded-full bg-background border border-border/60 object-cover" />
             <div>
               <p className="text-sm font-semibold text-foreground">
                 {channel.displayName}
@@ -125,11 +155,11 @@ export default function SearchPage() {
           </Link>
         ))}
 
-        {type === "channels" && channelResults.length === 0 && (
+        {type === "channels" && visibleChannelResults.length === 0 && (
           <p className="text-sm text-muted-foreground">No channels found.</p>
         )}
 
-        {type === "videos" && videoResults.length === 0 && (
+        {type === "videos" && visibleVideoResults.length === 0 && (
           <p className="text-sm text-muted-foreground">No videos found.</p>
         )}
       </div>

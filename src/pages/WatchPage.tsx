@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ThumbsUp,
@@ -42,13 +42,17 @@ import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import {
   API_BASE,
   addComment,
+  fetchAllVideos,
   fetchTrendingVideos,
   fetchVideoById,
   fetchVideoComments,
   fetchDownloadUrl,
+  partitionVideosByFormat,
   toggleLike,
-  toggleSave
+  toggleSave,
+  isClipLikeVideo
 } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const FALLBACK_VIDEO: VideoData = {
   id: "empty",
@@ -70,10 +74,27 @@ const FALLBACK_VIDEO: VideoData = {
 
 const FALLBACK_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=YB&backgroundColor=111111&textColor=ffffff";
 const FALLBACK_THUMBNAIL = "https://placehold.co/640x360/111111/ffffff?text=YoBunny";
+const RECOMMENDED_TARGET = 220;
+
+function mergeUniqueById(...lists: VideoData[][]) {
+  const out: VideoData[] = [];
+  const seen = new Set<string>();
+
+  for (const list of lists) {
+    for (const item of list) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      out.push(item);
+    }
+  }
+
+  return out;
+}
 
 export default function WatchPage() {
   const { id } = useParams();
   const { openAuthModal } = useAuthModal();
+  const isMobile = useIsMobile();
 
   const [video, setVideo] = useState<VideoData>(FALLBACK_VIDEO);
   const [playbackCandidates, setPlaybackCandidates] = useState<string[]>([]);
@@ -88,6 +109,8 @@ export default function WatchPage() {
   const [likedAnimating, setLikedAnimating] = useState(false);
   const [saved, setSaved] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentInput, setCommentInput] = useState("");
@@ -109,6 +132,7 @@ export default function WatchPage() {
   const progressInputRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
   const wasPlayingRef = useRef(false);
+  const lastWatchReportRef = useRef(0);
 
   const likeCount = useMemo(() => Math.max(0, Math.floor(video.viewCount * 0.04) + (liked ? 1 : 0)), [video.viewCount, liked]);
   const currentPlaybackUrl = playbackCandidates[playbackIndex] || "";
@@ -120,9 +144,10 @@ export default function WatchPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [videoDetails, trending, apiComments] = await Promise.all([
+        const [videoDetails, trending, latestPool, apiComments] = await Promise.all([
           fetchVideoById(id),
           fetchTrendingVideos(),
+          fetchAllVideos({ sort: "latest", limitPerPage: 80, maxPages: 20 }),
           fetchVideoComments(id)
         ]);
 
@@ -139,8 +164,15 @@ export default function WatchPage() {
         setPlaybackIndex(0);
         setPlaybackError("");
         setSignedFallbackTried(false);
+        lastWatchReportRef.current = 0;
         setDescription(videoDetails.description || "");
-        setRecommended(trending.filter((item) => item.id !== id).slice(0, 15));
+
+        const recommendationPool = mergeUniqueById(
+          trending,
+          latestPool
+        ).filter((item) => item.id !== id && !isClipLikeVideo(item));
+        setRecommended(recommendationPool.slice(0, RECOMMENDED_TARGET));
+
         setComments(apiComments.map((comment) => ({
           ...comment,
           user: {
@@ -176,6 +208,114 @@ export default function WatchPage() {
       cancelled = true;
     };
   }, [id]);
+
+  const reportWatchProgress = (progress: number) => {
+    if (!id) return;
+    const normalized = Math.max(0, Math.min(1, progress));
+    if (normalized < 0.05) return;
+    if (normalized <= lastWatchReportRef.current + 0.05 && normalized < 1) return;
+
+    lastWatchReportRef.current = normalized;
+  };
+
+  const enterPlayerFullscreen = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const container = video.parentElement as (HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }) | null;
+    const target = container || video;
+    const elementWithFullscreen = target as HTMLElement & {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => Promise<void> | void;
+      msRequestFullscreen?: () => Promise<void> | void;
+    };
+    const videoWithWebkit = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+
+    if (typeof elementWithFullscreen.requestFullscreen === "function") {
+      void elementWithFullscreen.requestFullscreen();
+      return;
+    }
+
+    if (typeof elementWithFullscreen.webkitRequestFullscreen === "function") {
+      void elementWithFullscreen.webkitRequestFullscreen();
+      return;
+    }
+
+    if (typeof elementWithFullscreen.msRequestFullscreen === "function") {
+      void elementWithFullscreen.msRequestFullscreen();
+      return;
+    }
+
+    if (typeof videoWithWebkit.webkitEnterFullscreen === "function") {
+      videoWithWebkit.webkitEnterFullscreen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = (target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      if (!videoRef.current) return;
+
+      const el = videoRef.current;
+      const duration = isFinite(el.duration) && el.duration > 0 ? el.duration : video.duration;
+
+      if (event.key === " " || event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (el.paused) {
+          void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+        } else {
+          el.pause();
+          setPlaying(false);
+        }
+        return;
+      }
+
+      if (event.key.toLowerCase() === "j" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        el.currentTime = Math.max(0, el.currentTime - 10);
+        return;
+      }
+
+      if (event.key.toLowerCase() === "l" || event.key === "ArrowRight") {
+        event.preventDefault();
+        el.currentTime = Math.min(duration, el.currentTime + 10);
+        return;
+      }
+
+      if (event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        el.muted = !el.muted;
+        return;
+      }
+
+      if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (document.fullscreenElement) {
+          void document.exitFullscreen();
+        } else {
+          enterPlayerFullscreen();
+        }
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        el.volume = Math.min(1, el.volume + 0.1);
+        el.muted = false;
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        el.volume = Math.max(0, el.volume - 0.1);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [enterPlayerFullscreen, video.duration]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -340,15 +480,21 @@ export default function WatchPage() {
               ref={videoRef}
               src={currentPlaybackUrl}
               poster={video.thumbnailUrl}
+              controls={isMobile}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              playsInline
               className="w-full h-full object-contain"
               onClick={togglePlayback}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onError={handleVideoError}
+              onContextMenu={(event) => event.preventDefault()}
               onTimeUpdate={(e) => {
                 const el = e.currentTarget;
                 const duration = isFinite(el.duration) && el.duration > 0 ? el.duration : video.duration;
                 const progress = duration > 0 ? (el.currentTime / duration) * 100 : 0;
+                const progressRatio = duration > 0 ? (el.currentTime / duration) : 0;
                 if (progressRef.current) {
                   progressRef.current.style.width = `${progress}%`;
                 }
@@ -360,13 +506,15 @@ export default function WatchPage() {
                   const s = Math.floor(el.currentTime % 60);
                   timeRef.current.innerText = `${m}:${s.toString().padStart(2, "0")}`;
                 }
+                reportWatchProgress(progressRatio);
               }}
+              onEnded={() => reportWatchProgress(1)}
             />
           ) : (
             <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-contain" />
           )}
 
-          {!playing && (
+          {!isMobile && !playing && (
             <div onClick={togglePlayback} className="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer group/play">
               <div className="w-20 h-20 bg-primary/90 text-primary-foreground rounded-full flex items-center justify-center backdrop-blur-md shadow-2xl transform transition-all group-hover/play:scale-110">
                 <Play size={40} fill="currentColor" className="ml-2" />
@@ -374,14 +522,14 @@ export default function WatchPage() {
             </div>
           )}
 
-          <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+          {!isMobile && <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
             <button onClick={() => setCcEnabled((v) => !v)} className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-colors ${ccEnabled ? "bg-white text-black" : "bg-black/50 text-white hover:bg-black/70"}`} aria-label="Toggle captions">
               <Captions size={18} />
             </button>
             <button onClick={() => setShowSettings((v) => !v)} className="w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md transition-colors" aria-label="Open settings">
               <Settings size={18} />
             </button>
-          </div>
+          </div>}
 
           {showSettings && (
             <>
@@ -401,7 +549,7 @@ export default function WatchPage() {
             </>
           )}
 
-          <div className="absolute bottom-0 left-0 right-0 pt-16 pb-4 px-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end z-20">
+          {!isMobile && <div className="absolute bottom-0 left-0 right-0 pt-16 pb-4 px-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end z-20">
             <div className="relative w-full h-1.5 mb-3 group/progress hover:h-2 transition-all">
               <div className="absolute inset-0 bg-white/30 rounded-full pointer-events-none"></div>
               <div ref={progressRef} className="absolute inset-y-0 left-0 bg-primary rounded-full pointer-events-none transition-all duration-75 ease-linear w-0"></div>
@@ -495,7 +643,7 @@ export default function WatchPage() {
                 <button 
                   onClick={() => {
                      if (document.fullscreenElement) document.exitFullscreen();
-                     else videoRef.current?.parentElement?.requestFullscreen();
+                     else enterPlayerFullscreen();
                   }} 
                   className="text-white hover:text-primary transition-colors"
                 >
@@ -503,7 +651,7 @@ export default function WatchPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         {playbackError && (
@@ -559,7 +707,7 @@ export default function WatchPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
                   <div className="absolute top-12 right-0 w-56 rounded-2xl bg-surface border border-border shadow-xl z-50 p-2 py-2 space-y-0.5 animate-fade-in origin-top-right">
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-xl text-sm font-medium transition-colors text-foreground"><Clock size={16} /> Watch later</button>
+                    <button onClick={() => { setShowMoreMenu(false); onSave(); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-xl text-sm font-medium transition-colors text-foreground"><Clock size={16} /> Watch later</button>
                     <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-xl text-sm font-medium transition-colors text-foreground"><Plus size={16} /> Add to channel</button>
                     <button onClick={copyLink} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-xl text-sm font-medium transition-colors text-foreground"><Copy size={16} /> Copy link</button>
                     <button onClick={downloadVideo} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-xl text-sm font-medium transition-colors text-foreground"><Download size={16} /> Download</button>
@@ -597,47 +745,115 @@ export default function WatchPage() {
           </button>
         </div>
 
-        <div className="bg-surface rounded-2xl p-5 mb-6 shadow-sm border border-border/50">
-          <p className={`text-sm text-foreground whitespace-pre-wrap ${descExpanded ? "" : "line-clamp-2"}`}>{description || video.title}</p>
-          <button onClick={() => setDescExpanded(!descExpanded)} className="flex items-center gap-1 text-sm font-medium text-muted-foreground mt-2 hover:text-foreground transition-colors">
-            {descExpanded ? <><ChevronUp size={14} /> Less</> : <><ChevronDown size={14} /> More</>}
-          </button>
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {video.tags.map((tag) => (
-              <Link key={tag} to={`/search?q=${tag}`} className="px-3 py-1 rounded-full text-xs bg-secondary text-muted-foreground hover:text-foreground transition-colors">#{tag}</Link>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-base font-semibold text-foreground mb-4">{comments.length} Comments</h3>
-          <div className="flex gap-2 mb-5">
-            <input value={commentInput} onChange={(e) => setCommentInput(e.target.value)} placeholder="Add a comment" className="flex-1 h-11 px-4 rounded-2xl bg-surface border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-            <button onClick={submitComment} className="px-5 h-11 rounded-2xl bg-primary text-primary-foreground text-sm font-medium transition-opacity hover:opacity-90">Comment</button>
-          </div>
-
-          <div className="space-y-6">
-            {comments.map((comment) => (
-              <div key={comment.id} className="flex gap-3">
-                <img
-                  src={comment.user.avatarUrl}
-                  alt={comment.user.displayName}
-                  className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
-                  onError={(event) => {
-                    event.currentTarget.src = FALLBACK_AVATAR;
-                  }}
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-foreground">{comment.user.displayName}</span>
-                    <span className="text-xs text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
+        {isMobile ? (
+          <>
+            <div className="bg-surface rounded-3xl mb-6 shadow-sm border border-border/50 overflow-hidden">
+              <button
+                onClick={() => setDescriptionOpen((prev) => !prev)}
+                className="w-full px-5 py-4 flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-foreground">Description</span>
+                {descriptionOpen ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+              </button>
+              {descriptionOpen && (
+                <div className="px-5 pb-5">
+                  <p className={`text-sm text-foreground whitespace-pre-wrap ${descExpanded ? "" : "line-clamp-2"}`}>{description || video.title}</p>
+                  <button onClick={() => setDescExpanded(!descExpanded)} className="flex items-center gap-1 text-sm font-medium text-muted-foreground mt-2 hover:text-foreground transition-colors">
+                    {descExpanded ? <><ChevronUp size={14} /> Less</> : <><ChevronDown size={14} /> More</>}
+                  </button>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {video.tags.map((tag) => (
+                      <Link key={tag} to={`/search?q=${tag}`} className="px-3 py-1 rounded-full text-xs bg-secondary text-muted-foreground hover:text-foreground transition-colors">#{tag}</Link>
+                    ))}
                   </div>
-                  <p className="text-sm text-foreground mb-2">{comment.body}</p>
                 </div>
+              )}
+            </div>
+
+            <div className="bg-surface rounded-3xl shadow-sm border border-border/50 overflow-hidden">
+              <button
+                onClick={() => setCommentsOpen((prev) => !prev)}
+                className="w-full px-5 py-4 flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-foreground">Comments ({comments.length})</span>
+                {commentsOpen ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+              </button>
+              {commentsOpen && (
+                <div className="px-5 pb-5">
+                  <div className="flex gap-2 mb-5">
+                    <input value={commentInput} onChange={(e) => setCommentInput(e.target.value)} placeholder="Add a comment" className="flex-1 h-11 px-4 rounded-full bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <button onClick={submitComment} className="px-5 h-11 rounded-full bg-primary text-primary-foreground text-sm font-medium transition-opacity hover:opacity-90">Comment</button>
+                  </div>
+
+                  <div className="space-y-6 max-h-[520px] overflow-y-auto pr-1">
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3">
+                        <img
+                          src={comment.user.avatarUrl}
+                          alt={comment.user.displayName}
+                          className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
+                          onError={(event) => {
+                            event.currentTarget.src = FALLBACK_AVATAR;
+                          }}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-foreground">{comment.user.displayName}</span>
+                            <span className="text-xs text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
+                          </div>
+                          <p className="text-sm text-foreground mb-2">{comment.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-surface rounded-3xl mb-6 shadow-sm border border-border/50 p-5">
+              <p className={`text-sm text-foreground whitespace-pre-wrap ${descExpanded ? "" : "line-clamp-3"}`}>{description || video.title}</p>
+              <button onClick={() => setDescExpanded(!descExpanded)} className="flex items-center gap-1 text-sm font-medium text-muted-foreground mt-2 hover:text-foreground transition-colors">
+                {descExpanded ? <><ChevronUp size={14} /> Less</> : <><ChevronDown size={14} /> More</>}
+              </button>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {video.tags.map((tag) => (
+                  <Link key={tag} to={`/search?q=${tag}`} className="px-3 py-1 rounded-full text-xs bg-secondary text-muted-foreground hover:text-foreground transition-colors">#{tag}</Link>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+
+            <div className="bg-surface rounded-3xl shadow-sm border border-border/50 p-5">
+              <p className="text-sm font-semibold text-foreground mb-4">Comments ({comments.length})</p>
+              <div className="flex gap-2 mb-5">
+                <input value={commentInput} onChange={(e) => setCommentInput(e.target.value)} placeholder="Add a comment" className="flex-1 h-11 px-4 rounded-full bg-background border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                <button onClick={submitComment} className="px-5 h-11 rounded-full bg-primary text-primary-foreground text-sm font-medium transition-opacity hover:opacity-90">Comment</button>
+              </div>
+              <div className="space-y-6 max-h-[520px] overflow-y-auto pr-1">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <img
+                      src={comment.user.avatarUrl}
+                      alt={comment.user.displayName}
+                      className="w-8 h-8 rounded-full bg-surface flex-shrink-0 object-cover"
+                      onError={(event) => {
+                        event.currentTarget.src = FALLBACK_AVATAR;
+                      }}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-foreground">{comment.user.displayName}</span>
+                        <span className="text-xs text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-foreground mb-2">{comment.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="lg:hidden mt-8">
           <h3 className="text-base font-semibold text-foreground mb-3">Up next</h3>
@@ -670,7 +886,7 @@ export default function WatchPage() {
         </div>
       </div>
 
-      <div className="hidden lg:block w-[360px] flex-shrink-0 space-y-3">
+      <div className="hidden lg:block w-[360px] flex-shrink-0 space-y-3 max-h-[calc(100vh-120px)] overflow-y-auto pr-1">
         <h3 className="text-base font-semibold text-foreground mb-3">Up next</h3>
         {recommended.map((v) => (
           <div key={v.id} className="flex gap-3 group relative">
@@ -702,7 +918,7 @@ export default function WatchPage() {
                 <>
                  <div className="fixed inset-0 z-40" onClick={() => setOpenRecommendedMenuId(null)} />
                  <div className="absolute right-0 top-full mt-1 w-56 rounded-2xl bg-surface border border-border shadow-xl z-50 p-2 py-2 space-y-0.5">
-                   <button className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground"><Clock size={16} /> Watch later</button>
+                   <button onClick={() => { setOpenRecommendedMenuId(null); onSave(); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground"><Clock size={16} /> Watch later</button>
                    <button className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground"><MinusCircle size={16} /> Not interesting</button>
                    <button className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground"><UserX size={16} /> Don't recommend channel</button>
                    <button className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground"><Share2 size={16} /> Share</button>

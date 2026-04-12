@@ -1,256 +1,115 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CategoryBar from "@/components/layout/CategoryBar";
+import { useEffect, useMemo, useState } from "react";
 import VideoGrid from "@/components/video/VideoGrid";
 import ClipGrid from "@/components/video/ClipGrid";
-import type { VideoData } from "@/lib/mockData";
-import { fetchVideos, isClipLikeVideo, partitionVideosByFormat } from "@/lib/api";
+import { fetchAllVideos } from "@/lib/api";
+import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
 
-const PAGE_SIZE = 40;
-const TOP_LANDSCAPE_COUNT = 15;
-
-function shuffleInPlace<T>(arr: T[]) {
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const temp = arr[i];
-    arr[i] = arr[j];
-    arr[j] = temp;
-  }
-  return arr;
-}
-
-function mixByCreator(videos: VideoData[]) {
-  const groups = new Map<string, VideoData[]>();
-
-  for (const video of videos) {
-    const key = video.channel?.username || "unknown";
-    const list = groups.get(key) || [];
-    list.push(video);
-    groups.set(key, list);
-  }
-
-  for (const list of groups.values()) {
-    shuffleInPlace(list);
-  }
-
-  const creatorKeys = shuffleInPlace(Array.from(groups.keys()));
-  const mixed: VideoData[] = [];
-
-  while (creatorKeys.length > 0) {
-    for (let i = creatorKeys.length - 1; i >= 0; i -= 1) {
-      const key = creatorKeys[i];
-      const bucket = groups.get(key);
-      if (!bucket || bucket.length === 0) {
-        creatorKeys.splice(i, 1);
-        continue;
-      }
-
-      const item = bucket.shift();
-      if (item) {
-        mixed.push(item);
-      }
-
-      if (bucket.length === 0) {
-        creatorKeys.splice(i, 1);
-      }
-    }
-  }
-
-  return mixed;
-}
-
-function hasClipTag(video: VideoData) {
-  const tags = (video.tags || []).map((tag) => String(tag).toLowerCase());
-  return tags.includes("__auto_clip__") || tags.includes("__portrait__") || tags.includes("portrait") || tags.includes("short") || tags.includes("shorts") || tags.includes("clip") || tags.includes("clips");
-}
-
-function isClipCandidate(video: VideoData) {
-  return isClipLikeVideo(video) || hasClipTag(video);
-}
+const LANDSCAPE_ROWS = 12;
+const CLIPS_CAROUSEL = 80;
 
 export default function HomePage() {
-  const [category, setCategory] = useState("All");
-  const [allVideos, setAllVideos] = useState<VideoData[]>([]);
-  const [clipsPreview, setClipsPreview] = useState<VideoData[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMorePages, setHasMorePages] = useState(true);
+  const [allVideos, setAllVideos] = useState<Awaited<ReturnType<typeof fetchAllVideos>>>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [clipsLoading, setClipsLoading] = useState(true);
   const [error, setError] = useState("");
-  const pageSentinelRef = useRef<HTMLDivElement | null>(null);
-  const loadMoreLockRef = useRef(false);
-  const [mixSeed, setMixSeed] = useState(() => Date.now());
-
-  const loadPage = useCallback(
-    async (targetPage: number, replace = false) => {
-      try {
-        if (targetPage === 1) {
-          setLoading(true);
-        } else {
-          setLoadingMore(true);
-        }
-
-        const items = await fetchVideos({
-          sort: "latest",
-          page: targetPage,
-          limit: PAGE_SIZE,
-          ...(category !== "All" ? { category } : {})
-        });
-
-        setAllVideos((prev) => {
-          const base = replace ? [] : prev;
-          const seen = new Set(base.map((item) => item.id));
-          const merged = [...base];
-
-          for (const item of items) {
-            if (seen.has(item.id)) continue;
-            seen.add(item.id);
-            merged.push(item);
-          }
-
-          return merged;
-        });
-
-        setHasMorePages(items.length >= PAGE_SIZE);
-        setPage(targetPage);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load videos");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [category]
-  );
-
-  useEffect(() => {
-    setAllVideos([]);
-    setPage(1);
-    setHasMorePages(true);
-    setError("");
-    setMixSeed(Date.now());
-    void loadPage(1, true);
-  }, [category, loadPage]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadClipsPreview = async () => {
-      setClipsLoading(true);
-      setClipsPreview([]);
+    const load = async () => {
+      setError("");
+      setLoading(true);
 
       try {
-        const seen = new Set<string>();
-        const collected: VideoData[] = [];
+        const videos = await fetchAllVideos({
+          sort: "latest",
+          limitPerPage: 80,
+          maxPages: 3
+        });
 
-        for (let clipPage = 1; clipPage <= 30; clipPage += 1) {
-          const items = await fetchVideos({ sort: "latest", page: clipPage, limit: PAGE_SIZE });
-          if (cancelled) return;
-
-          const { clips: clipItems } = await partitionVideosByFormat(items);
-
-          for (const item of clipItems) {
-            if (seen.has(item.id)) continue;
-            seen.add(item.id);
-            collected.push(item);
-          }
-
-          setClipsPreview([...collected.slice(0, 60)]);
-
-          if (collected.length >= 60 || items.length < PAGE_SIZE) {
-            break;
-          }
-        }
-      } catch {
         if (!cancelled) {
-          setClipsPreview([]);
+          setAllVideos(videos);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setAllVideos([]);
+          setError(err instanceof Error ? err.message : "Failed to load videos");
         }
       } finally {
         if (!cancelled) {
-          setClipsLoading(false);
+          setLoading(false);
         }
       }
     };
 
-    void loadClipsPreview();
+    void load();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const onLoadMore = useCallback(async () => {
-    if (loading || loadingMore || !hasMorePages || loadMoreLockRef.current) return;
-    loadMoreLockRef.current = true;
-    try {
-      await loadPage(page + 1);
-    } finally {
-      loadMoreLockRef.current = false;
-    }
-  }, [hasMorePages, loadPage, loading, loadingMore, page]);
-
-  useEffect(() => {
-    if (!pageSentinelRef.current || loading || loadingMore || !hasMorePages) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        void onLoadMore();
-      },
-      {
-        rootMargin: "900px 0px"
-      }
-    );
-
-    observer.observe(pageSentinelRef.current);
-    return () => observer.disconnect();
-  }, [hasMorePages, loading, loadingMore, onLoadMore]);
-
-  const clipIds = useMemo(() => new Set(clipsPreview.map((clip) => clip.id)), [clipsPreview]);
-  const videos = useMemo(
-    () => allVideos.filter((video) => !clipIds.has(video.id) && !isClipCandidate(video)),
-    [allVideos, clipIds]
-  );
-  const mixedLandscapeVideos = useMemo(() => {
-    // mixSeed is used to re-shuffle when category changes or page is refreshed.
-    void mixSeed;
-    return mixByCreator(videos);
-  }, [videos, mixSeed]);
-  const topLandscapeVideos = mixedLandscapeVideos.slice(0, TOP_LANDSCAPE_COUNT);
-  const bottomLandscapeVideos = mixedLandscapeVideos.slice(TOP_LANDSCAPE_COUNT);
+  const sortedVideos = useMemo(() => sortFeedVideos(allVideos, "popular"), [allVideos]);
+  const { clips, landscape } = useMemo(() => splitFeedVideos(sortedVideos), [sortedVideos]);
+  const landscapeVideos = landscape.slice(0, LANDSCAPE_ROWS);
+  const clipsCarousel = clips.slice(0, CLIPS_CAROUSEL);
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
-      <CategoryBar selected={category} onSelect={setCategory} />
-      {loading && <p className="text-sm text-muted-foreground">Loading videos...</p>}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      {!loading && !error && topLandscapeVideos.length > 0 && (
-        <div className="pt-2">
-          <h2 className="text-lg font-semibold text-foreground mb-6">Videos ({videos.length})</h2>
-          <VideoGrid videos={topLandscapeVideos} />
+    <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">
+      <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent opacity-60 pointer-events-none -z-10 rounded-t-[3rem]" />
+      
+      {loading && (
+        <div className="flex flex-col items-center justify-center p-32 space-y-5">
+           <div className="relative w-16 h-16">
+             <div className="absolute inset-0 rounded-full border-[3px] border-white/10"></div>
+             <div className="absolute inset-0 rounded-full border-[3px] border-white border-t-transparent animate-spin"></div>
+           </div>
+           <p className="text-sm font-bold text-white/50 tracking-widest uppercase">Curating content</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="p-10 rounded-3xl bg-red-500/10 border border-red-500/20 text-center">
+            <p className="text-red-400 font-medium">{error}</p>
         </div>
       )}
 
-      <div className="pt-2">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Clips ({clipsPreview.length})</h2>
-        {clipsLoading && <p className="text-sm text-muted-foreground">Loading clips...</p>}
-        {!clipsLoading && clipsPreview.length === 0 && (
-          <p className="text-sm text-muted-foreground">No clips yet. Upload a portrait video under 1 minute.</p>
-        )}
-        {!clipsLoading && clipsPreview.length > 0 && <ClipGrid clips={clipsPreview} mode="row" />}
-      </div>
-
-      {!loading && !error && bottomLandscapeVideos.length > 0 && (
-        <div className="pt-6 mt-4 border-t border-white/10">
-          <h2 className="text-lg font-semibold text-foreground mb-6">More Videos</h2>
-          <VideoGrid videos={bottomLandscapeVideos} />
-          {loadingMore && <p className="text-sm text-muted-foreground mt-4">Loading more videos...</p>}
+      {!loading && !error && landscapeVideos.length > 0 && (
+        <div className="space-y-6 pt-2">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-4">Popular Videos</h2>
+          </div>
+          <VideoGrid videos={landscapeVideos} />
         </div>
       )}
-      {!loading && !error && videos.length === 0 && <p className="text-sm text-muted-foreground">No landscape videos yet.</p>}
-      {!loading && !error && hasMorePages && <div ref={pageSentinelRef} className="h-1 w-full" aria-hidden="true" />}
+
+      {!loading && !error && clipsCarousel.length > 0 && (
+        <div className="space-y-6 pt-8">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-4">Trending Clips</h2>
+          </div>
+          <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8">
+            <div className="flex gap-3 min-w-max">
+              {clipsCarousel.map((clip) => (
+                <a key={clip.id} href={`/shorts/${clip.id}`} className="group flex-shrink-0 rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-40 h-56">
+                  <div className="relative w-full h-full">
+                    <img src={clip.thumbnailUrl} alt={clip.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-xs font-semibold text-white line-clamp-2">{clip.title}</p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && landscapeVideos.length === 0 && clipsCarousel.length === 0 && (
+         <div className="p-20 text-center">
+            <p className="text-base font-medium text-white/40">No videos available right now.</p>
+         </div>
+      )}
     </div>
   );
 }

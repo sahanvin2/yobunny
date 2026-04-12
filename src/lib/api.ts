@@ -1,6 +1,6 @@
 import type { VideoData, CommentData } from "@/lib/mockData";
 
-const rawApiBase = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const rawApiBase = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "/api";
 export const API_BASE = rawApiBase.replace(/\/$/, "");
 export const AUTO_CLIP_TAG = "__AUTO_CLIP__";
 
@@ -25,6 +25,9 @@ type ApiVideo = {
   status?: "UPLOADING" | "PROCESSING" | "READY" | "FAILED" | "SCHEDULED";
   visibility?: "PUBLIC" | "PRIVATE" | "UNLISTED";
   viewCount: number;
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
   publishedAt?: string | null;
   createdAt: string;
   category: string;
@@ -65,6 +68,9 @@ export function mapApiVideoToVideoData(video: ApiVideo): VideoData {
     hlsBaseUrl: video.hlsBaseUrl || undefined,
     duration: video.duration || 0,
     viewCount: video.viewCount,
+    likeCount: video.likeCount,
+    commentCount: video.commentCount,
+    shareCount: video.shareCount,
     publishedAt: video.publishedAt || video.createdAt,
     category: video.category,
     tags: video.tags || [],
@@ -76,8 +82,13 @@ export function isAutoClipVideo(video: VideoData): boolean {
   return Boolean(video.duration > 0 && video.duration <= 60 && video.tags.includes(AUTO_CLIP_TAG));
 }
 
+function hasPortraitTag(video: VideoData): boolean {
+  const tags = (video.tags || []).map((tag) => String(tag).toLowerCase());
+  return tags.includes("__portrait__") || tags.includes("portrait");
+}
+
 export function isClipLikeVideo(video: VideoData): boolean {
-  return isAutoClipVideo(video) || Boolean(video.duration > 0 && video.duration <= 60);
+  return isAutoClipVideo(video) || hasPortraitTag(video) || Boolean(video.duration > 0 && video.duration <= 60);
 }
 
 const orientationCache = new Map<string, boolean>();
@@ -110,12 +121,15 @@ export async function partitionVideosByFormat(videos: VideoData[]) {
   const clips: VideoData[] = [];
   const regularVideos: VideoData[] = [];
 
-  for (const video of videos) {
+  const checks = await Promise.all(videos.map(async (video) => {
     let isClip = hasClipTag(video);
     if (!isClip) {
       isClip = await detectPortraitFromThumbnail(video);
     }
+    return { video, isClip };
+  }));
 
+  for (const { video, isClip } of checks) {
     if (isClip) {
       clips.push(video);
     } else {
@@ -140,8 +154,8 @@ export async function fetchVideos(params?: { category?: string; sort?: "latest" 
 }
 
 export async function fetchAllVideos(params?: { category?: string; sort?: "latest" | "views"; limitPerPage?: number; maxPages?: number }) {
-  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 200, 1), 200);
-  const maxPages = Math.max(params?.maxPages ?? 200, 1);
+  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 60, 1), 200);
+  const maxPages = Math.max(params?.maxPages ?? 5, 1);
   const all: VideoData[] = [];
   const seen = new Set<string>();
 

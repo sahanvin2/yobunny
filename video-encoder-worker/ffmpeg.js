@@ -124,7 +124,7 @@ export async function encodeToHls({ inputPath, outputRoot, ffmpegPath, ffprobePa
       `-profile:v:${i}`,
       "high",
       `-preset:v:${i}`,
-      "p5",
+      "p3",
       `-g:v:${i}`,
       "48",
       `-keyint_min:v:${i}`,

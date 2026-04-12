@@ -25,7 +25,7 @@ export function createB2Client(env) {
 }
 
 export async function uploadFile(client, env, localPath, remoteKey) {
-  const body = await fs.readFile(localPath);
+  const body = fs.createReadStream(localPath);
   await client.send(
     new PutObjectCommand({
       Bucket: env.B2_BUCKET,

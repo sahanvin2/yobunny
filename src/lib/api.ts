@@ -181,10 +181,18 @@ export async function fetchVideos(params?: { category?: string; sort?: "latest" 
   if (params?.page) query.set("page", String(params.page));
   if (params?.limit) query.set("limit", String(params.limit));
 
-  const res = await fetch(`${API_BASE}/videos?${query.toString()}`);
-  if (!res.ok) throw new Error("Failed to fetch videos");
-  const data = await res.json() as { items: ApiVideo[] };
-  return data.items.map(mapApiVideoToVideoData);
+  const url = `${API_BASE}/videos?${query.toString()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json() as { items: ApiVideo[] };
+    return data.items.map(mapApiVideoToVideoData);
+  } catch (error) {
+    console.error(`[API] Failed to fetch videos from ${url}:`, error);
+    throw error;
+  }
 }
 
 export async function fetchAllVideos(params?: { category?: string; sort?: "latest" | "views"; limitPerPage?: number; maxPages?: number }) {
@@ -567,9 +575,17 @@ export async function fetchPosts(params?: { page?: number; limit?: number; sort?
   if (params?.limit) query.set("limit", String(params.limit));
   if (params?.sort) query.set("sort", params.sort);
 
-  const res = await fetch(`${API_BASE}/posts?${query.toString()}`);
-  if (!res.ok) throw new Error("Failed to fetch posts");
-  return res.json() as Promise<{ items: ApiPost[]; pagination: { page: number; limit: number; total: number } }>;
+  const url = `${API_BASE}/posts?${query.toString()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return res.json() as Promise<{ items: ApiPost[]; pagination: { page: number; limit: number; total: number } }>;
+  } catch (error) {
+    console.error(`[API] Failed to fetch posts from ${url}:`, error);
+    throw error;
+  }
 }
 
 export async function fetchMyPosts() {

@@ -197,16 +197,18 @@ export default function HomePage() {
             <Link to="/posts" className="text-sm text-white/70 hover:text-white">View all</Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {posts.map((post) => (
-              <Link key={post.id} to={`/posts?open=${post.id}`} className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 min-h-[220px] flex flex-col">
-                <h3 className="text-base font-semibold text-white line-clamp-2">{post.title}</h3>
-                <p className="text-sm text-white/70 mt-3 line-clamp-5">{post.content}</p>
-              </Link>
-            ))}
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:col-span-3">
+              {posts.map((post) => (
+                <Link key={post.id} to={`/posts?open=${post.id}`} className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 p-4 min-h-[220px] flex flex-col">
+                  <h3 className="text-base font-semibold text-white line-clamp-2">{post.title}</h3>
+                  <p className="text-sm text-white/70 mt-3 line-clamp-5">{post.content}</p>
+                </Link>
+              ))}
+            </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] h-20 sm:h-24 lg:h-28" aria-hidden="true" />
+            <div className="hidden lg:block rounded-2xl border border-white/10 bg-white/[0.03] min-h-[220px]" aria-hidden="true" />
+          </div>
         </div>
       )}
 

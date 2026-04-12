@@ -4,10 +4,13 @@ import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react";
 import { fetchVideos, partitionVideosByFormat, toggleLike, toggleSave } from "@/lib/api";
 import { formatRelativeTime, formatViewCount, type VideoData } from "@/lib/mockData";
 import { sortShortsVideos } from "@/lib/videoFeed";
+import { isAuthenticated } from "@/lib/auth";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
 
 export default function ShortsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const PAGE_SIZE = 40;
 
   const [clips, setClips] = useState<VideoData[]>([]);
@@ -26,6 +29,7 @@ export default function ShortsPage() {
   const [activeVideoId, setActiveVideoId] = useState<string>(id || "");
   const [likedById, setLikedById] = useState<Record<string, boolean>>({});
   const [savedById, setSavedById] = useState<Record<string, boolean>>({});
+  const [playerReady, setPlayerReady] = useState(!Boolean(id));
 
   const isPlayerMode = Boolean(id);
 
@@ -86,6 +90,31 @@ export default function ShortsPage() {
   }, [id, clips, hasMore, loading, loadingMore, loadPage, page]);
 
   useEffect(() => {
+    if (!isPlayerMode || !id) {
+      setPlayerReady(true);
+      return;
+    }
+
+    didJumpToInitialRef.current = false;
+    setPlayerReady(false);
+  }, [id, isPlayerMode]);
+
+  useEffect(() => {
+    if (!isPlayerMode || !id) return;
+
+    if (clips.some((item) => item.id === id)) {
+      setPlayerReady(true);
+      return;
+    }
+
+    if (!loading && !loadingMore && !hasMore) {
+      setStatus("Short not found");
+      window.setTimeout(() => setStatus(""), 1500);
+      navigate("/shorts", { replace: true });
+    }
+  }, [clips, hasMore, id, isPlayerMode, loading, loadingMore, navigate]);
+
+  useEffect(() => {
     if (!gridSentinelRef.current || isPlayerMode) return;
     const node = gridSentinelRef.current;
 
@@ -122,13 +151,14 @@ export default function ShortsPage() {
   }, [isPlayerMode, hasMore, loading, loadingMore, loadPage, page]);
 
   useEffect(() => {
+    if (!playerReady) return;
     if (!isPlayerMode || !id) return;
     const target = cardRefs.current[id];
     if (!target) return;
     target.scrollIntoView({ behavior: didJumpToInitialRef.current ? "smooth" : "auto", block: "start" });
     didJumpToInitialRef.current = true;
     setActiveVideoId(id);
-  }, [id, isPlayerMode, clips.length]);
+  }, [id, isPlayerMode, clips.length, playerReady]);
 
   useEffect(() => {
     if (!isPlayerMode || !playerContainerRef.current) return;
@@ -177,6 +207,11 @@ export default function ShortsPage() {
   }, []);
 
   const onLike = useCallback(async (videoId: string) => {
+    if (!isAuthenticated()) {
+      openAuthModal(window.location.pathname + window.location.search);
+      return;
+    }
+
     try {
       const result = await toggleLike(videoId);
       setLikedById((prev) => ({ ...prev, [videoId]: result.liked }));
@@ -184,9 +219,14 @@ export default function ShortsPage() {
       setStatus("Like failed");
       window.setTimeout(() => setStatus(""), 1200);
     }
-  }, []);
+  }, [openAuthModal]);
 
   const onSave = useCallback(async (videoId: string) => {
+    if (!isAuthenticated()) {
+      openAuthModal(window.location.pathname + window.location.search);
+      return;
+    }
+
     try {
       const result = await toggleSave(videoId);
       setSavedById((prev) => ({ ...prev, [videoId]: result.saved }));
@@ -196,6 +236,11 @@ export default function ShortsPage() {
       setStatus("Save failed");
       window.setTimeout(() => setStatus(""), 1200);
     }
+  }, [openAuthModal]);
+
+  const onComments = useCallback(() => {
+    setStatus("Comments panel coming soon");
+    window.setTimeout(() => setStatus(""), 1200);
   }, []);
 
   const shorts = useMemo(() => clips.filter((item) => Boolean(item.hlsBaseUrl)), [clips]);
@@ -247,6 +292,10 @@ export default function ShortsPage() {
     );
   }
 
+  if (!playerReady) {
+    return <div className="p-4 lg:p-6 text-sm text-muted-foreground">Opening selected short...</div>;
+  }
+
   return (
     <div className="h-[calc(100vh-64px)] bg-black text-white">
       <div
@@ -296,7 +345,6 @@ export default function ShortsPage() {
                   >
                     <Heart size={18} />
                   </button>
-                  <p className="text-[11px] text-white/85 font-semibold">{likedById[video.id] ? "Liked" : (video.likeCount || 0)}</p>
                   <button
                     type="button"
                     onClick={() => void onSave(video.id)}
@@ -305,13 +353,12 @@ export default function ShortsPage() {
                   >
                     <Bookmark size={18} />
                   </button>
-                  <p className="text-[11px] text-white/85 font-semibold">{savedById[video.id] ? "Saved" : "Save"}</p>
                   <button type="button" onClick={() => void onShare(video.id)} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 hover:bg-black/60 inline-flex items-center justify-center" title="Share">
                     <Share2 size={18} />
                   </button>
-                  <Link to={`/watch/${video.id}`} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 inline-flex items-center justify-center hover:bg-black/60" title="Comments">
+                  <button type="button" onClick={onComments} className="h-11 w-11 rounded-full bg-black/45 border border-white/20 inline-flex items-center justify-center hover:bg-black/60" title="Comments">
                     <MessageCircle size={18} />
-                  </Link>
+                  </button>
                 </aside>
               </div>
             </section>

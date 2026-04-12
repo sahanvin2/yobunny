@@ -51,7 +51,8 @@ export default function HomePage() {
   const sortedVideos = useMemo(() => sortFeedVideos(allVideos, "popular"), [allVideos]);
   const { clips, landscape } = useMemo(() => splitFeedVideos(sortedVideos), [sortedVideos]);
   const landscapeVideos = landscape.slice(0, LANDSCAPE_ROWS);
-  const clipsCarousel = clips.slice(0, CLIPS_CAROUSEL);
+  const hasDetectedClips = clips.length > 0;
+  const clipsCarousel = (hasDetectedClips ? clips : sortedVideos).slice(0, CLIPS_CAROUSEL);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto animate-fade-in relative z-10">
@@ -90,7 +91,7 @@ export default function HomePage() {
           <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8">
             <div className="flex gap-3 min-w-max">
               {clipsCarousel.map((clip) => (
-                <a key={clip.id} href={`/shorts/${clip.id}`} className="group flex-shrink-0 rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-40 h-56">
+                <a key={clip.id} href={hasDetectedClips ? `/shorts/${clip.id}` : `/watch/${clip.id}`} className="group flex-shrink-0 rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-40 h-56">
                   <div className="relative w-full h-full">
                     <img src={clip.thumbnailUrl} alt={clip.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />

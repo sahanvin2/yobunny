@@ -32,6 +32,9 @@ model User {
   notificationsSent Notification[] @relation("fromUser")
   savedVideos     SavedVideo[]
   livestreams     Livestream[]
+  posts           Post[]
+  postLikes       PostLike[]
+  postComments    PostComment[]
 }
 
 model Video {
@@ -195,12 +198,67 @@ model LiveComment {
   @@index([livestreamId, createdAt(sort: Desc)])
 }
 
+model Post {
+  id           String       @id @default(cuid())
+  title        String
+  content      String
+  fileKey      String
+  fileUrl      String
+  fileName     String
+  mimeType     String
+  fileSize     BigInt
+  status       PostStatus   @default(PUBLISHED)
+  visibility   Visibility   @default(PUBLIC)
+  viewCount    Int          @default(0)
+  likeCount    Int          @default(0)
+  commentCount Int          @default(0)
+  publishedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  likes        PostLike[]
+  comments     PostComment[]
+
+  @@index([status, visibility, publishedAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model PostLike {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id])
+
+  @@id([userId, postId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  postId    String
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id])
+
+  @@index([postId, createdAt(sort: Desc)])
+}
+
 enum VideoStatus {
   UPLOADING
   PROCESSING
   READY
   FAILED
   SCHEDULED
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  FAILED
 }
 
 enum Visibility {

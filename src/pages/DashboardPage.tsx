@@ -118,9 +118,14 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-white tracking-tight drop-shadow-sm">Dashboard</h1>
           <p className="text-sm text-white/50 mt-1">Manage your content and analytics</p>
         </div>
-        <Link to="/upload" className="px-8 py-3 rounded-full bg-white text-black text-sm font-bold shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 whitespace-nowrap text-center">
-          Upload Video
-        </Link>
+        <div className="flex gap-2">
+          <Link to="/posts/create" className="px-5 py-3 rounded-full border border-white/30 text-white text-sm font-bold hover:bg-white/10 transition-all duration-300 whitespace-nowrap text-center">
+            Create Post
+          </Link>
+          <Link to="/upload" className="px-8 py-3 rounded-full bg-white text-black text-sm font-bold shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 whitespace-nowrap text-center">
+            Upload Video
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Home, TrendingUp, Clock, Bookmark, ThumbsUp, LayoutDashboard,
   ChevronLeft, ChevronRight, Radio, Scissors, ListVideo,
-  Smile, Film, Tv, Trophy, Gamepad2, MonitorPlay
+  Smile, Film, Tv, Trophy, Gamepad2, MonitorPlay, FileText
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
@@ -13,7 +13,8 @@ const navSections = [
       { icon: Radio, label: "Streams", path: "/streams" },
       { icon: Home, label: "Home", path: "/" },
       { icon: TrendingUp, label: "Trending", path: "/trending" },
-      { icon: Scissors, label: "Shorts", path: "/shorts" },
+      { icon: FileText, label: "Posts", path: "/posts" },
+      { icon: Scissors, label: "Clips", path: "/clips" },
     ]
   },
   {

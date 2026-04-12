@@ -8,7 +8,7 @@ import AuthModalProvider from "./components/auth/AuthModalProvider";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ChannelPage from "./pages/ChannelPage";
 import ChannelSettingsPage from "./pages/ChannelSettingsPage";
-import ClipsPage from "./pages/ClipsPage";
+
 import DashboardCommentsPage from "./pages/DashboardCommentsPage";
 import DashboardPage from "./pages/DashboardPage";
 import EditVideoPage from "./pages/EditVideoPage";
@@ -20,10 +20,12 @@ import MyChannelsPage from "./pages/MyChannelsPage";
 import NotFound from "./pages/NotFound";
 import NotificationsPage from "./pages/NotificationsPage";
 import PlaylistsPage from "./pages/PlaylistsPage";
+import PostsPage from "./pages/PostsPage";
+import PostUploadPage from "./pages/PostUploadPage";
 import SavedPage from "./pages/SavedPage";
 import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
-import ShortsPage from "./pages/ShortsPage";
+import ClipsPage from "./pages/ClipsPage";
 import StreamsPage from "./pages/StreamsPage";
 import SubscriptionsPage from "./pages/SubscriptionsPage";
 import TrendingPage from "./pages/TrendingPage";
@@ -118,9 +120,17 @@ const App = () => (
                 }
               />
               <Route path="/trending" element={<TrendingPage />} />
+              <Route path="/posts" element={<PostsPage />} />
               <Route path="/clips" element={<ClipsPage />} />
-              <Route path="/shorts" element={<ShortsPage />} />
-              <Route path="/shorts/:id" element={<ShortsPage />} />
+              <Route path="/clips/:id" element={<ClipsPage />} />
+              <Route
+                path="/posts/create"
+                element={
+                  <ProtectedRoute>
+                    <PostUploadPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/streams" element={<StreamsPage />} />
               <Route path="/live" element={<StreamsPage />} />
               <Route

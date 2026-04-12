@@ -17,7 +17,7 @@ export default function ClipGrid({ clips, mode = "grid" }: ClipGridProps) {
           {clips.map((clip) => (
             <Link
               key={clip.id}
-              to={`/shorts/${clip.id}`}
+              to={`/clips/${clip.id}`}
               className={`group rounded-[1.75rem] overflow-hidden border border-border/60 bg-surface/70 hover:bg-surface-hover transition-colors shadow-sm ${isRow ? "w-[190px] sm:w-[220px] flex-shrink-0 snap-start" : ""}`}
             >
               <div className="relative aspect-[9/16] bg-black overflow-hidden">

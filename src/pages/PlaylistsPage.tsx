@@ -5,7 +5,7 @@ import VideoGrid from "@/components/video/VideoGrid";
 import type { VideoData } from "@/lib/mockData";
 import { fetchHistoryVideos, fetchLikedVideos, fetchSavedVideos, isClipLikeVideo, mapApiVideoToVideoData } from "@/lib/api";
 
-type PlaylistTab = "watchLater" | "liked" | "history" | "shorts" | "longs";
+type PlaylistTab = "watchLater" | "liked" | "history" | "clips" | "longs";
 
 export default function PlaylistsPage() {
   const [watchLater, setWatchLater] = useState<VideoData[]>([]);
@@ -21,7 +21,7 @@ export default function PlaylistsPage() {
       .catch(() => setHistory([]));
   }, []);
 
-  const shorts = useMemo(() => {
+  const clips = useMemo(() => {
     const all = [...watchLater, ...liked, ...history];
     const dedup = new Map<string, VideoData>();
     for (const item of all) dedup.set(item.id, item);
@@ -41,15 +41,15 @@ export default function PlaylistsPage() {
       ? liked
       : tab === "history"
         ? history
-        : tab === "shorts"
-          ? shorts
+        : tab === "clips"
+          ? clips
           : longs;
 
   const cards = [
     { id: "watchLater" as const, title: "Watch Later", count: watchLater.length, description: "Saved videos you want to watch next" },
     { id: "liked" as const, title: "Liked Videos", count: liked.length, description: "Videos you liked" },
     { id: "history" as const, title: "History Replay", count: history.length, description: "Videos from your watch history" },
-    { id: "shorts" as const, title: "My Shorts Mix", count: shorts.length, description: "Short-form videos from your library" },
+    { id: "clips" as const, title: "My Clips Mix", count: clips.length, description: "Short-form videos from your library" },
     { id: "longs" as const, title: "My Long-form Mix", count: longs.length, description: "Long videos from your library" }
   ];
 

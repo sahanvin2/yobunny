@@ -12,6 +12,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   const authHeader = request.headers.authorization;
 
   if (env.DEV_AUTH_BYPASS) {
+    const devDisplayName = env.DEV_AUTH_DISPLAY_NAME;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
     const uid = token.length > 0 ? token : env.DEV_AUTH_UID;
     const username = `dev_${uid.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20)}`;
@@ -21,7 +22,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     request.authUser = {
       uid,
       email: devEmail,
-      name: "Local Dev User",
+      name: devDisplayName,
       picture: undefined
     };
 
@@ -29,12 +30,12 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
       where: { firebaseUid: uid },
       update: {
         email: devEmail,
-        displayName: "Local Dev User"
+        displayName: devDisplayName
       },
       create: {
         firebaseUid: uid,
         username,
-        displayName: "Local Dev User",
+        displayName: devDisplayName,
         email: devEmail
       }
     });

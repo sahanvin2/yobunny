@@ -280,7 +280,7 @@ const uploadUrlSchema = z.object({
   title: z.string().min(1).max(150),
   category: z.enum(CATEGORY_VALUES),
   fileExt: z.string().min(2).max(10).default("mp4"),
-  modelNames: z.array(z.string().min(1).max(80)).min(1),
+  modelNames: z.array(z.string().min(1).max(80)).max(12).default([]),
   creatorChannelId: z.string().min(2).max(120)
 });
 
@@ -528,8 +528,14 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: "Please choose a channel before uploading", code: "CHANNEL_REQUIRED" });
     }
 
+    const inputModelNames = parsed.data.modelNames;
+    const fallbackModelName = (dbUser.displayName || "").trim();
+    const effectiveModelNames = inputModelNames.length > 0
+      ? inputModelNames
+      : (fallbackModelName ? [fallbackModelName] : []);
+
     const modelTags = Array.from(
-      new Set(parsed.data.modelNames.map((name) => normalizeModelSlug(name)).filter(Boolean).map((slug) => toModelTag(slug)))
+      new Set(effectiveModelNames.map((name) => normalizeModelSlug(name)).filter(Boolean).map((slug) => toModelTag(slug)))
     );
     if (modelTags.length === 0) {
       return reply.code(400).send({ error: "Please add at least one model tag", code: "MODEL_REQUIRED" });
@@ -688,6 +694,13 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
             .map((slug) => toModelTag(slug))
         )
       );
+
+      if (parsedModelTags.length === 0) {
+        const fallbackModelSlug = normalizeModelSlug(dbUser.displayName || "");
+        if (fallbackModelSlug) {
+          parsedModelTags.push(toModelTag(fallbackModelSlug));
+        }
+      }
 
       if (parsedModelTags.length === 0) {
         return reply.code(400).send({ error: "Please add at least one model tag", code: "MODEL_REQUIRED" });

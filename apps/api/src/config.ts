@@ -7,6 +7,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:8080,http://localhost:8081"),
   DEV_AUTH_BYPASS: z.coerce.boolean().default(true),
   DEV_AUTH_UID: z.string().default("dev-user-1"),
+  DEV_AUTH_DISPLAY_NAME: z.string().default("Leia Von"),
   DEV_AUTH_EMAIL: z.string().email().default("dev@yobunny.local"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),

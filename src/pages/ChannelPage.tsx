@@ -13,6 +13,7 @@ export default function ChannelPage() {
   const [channel, setChannel] = useState<{ username: string; displayName: string; avatarUrl: string | null; bannerUrl?: string | null; subscriberCount: number; isVerified?: boolean } | null>(null);
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [subscribed, setSubscribed] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
 
@@ -95,10 +96,14 @@ export default function ChannelPage() {
           />
 
           <div className="flex-1 text-center sm:text-left">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
+            <button
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              className="text-2xl sm:text-3xl font-bold text-white inline-flex items-center gap-2 justify-center sm:justify-start hover:text-white/85 transition-colors"
+            >
               {channel.displayName}
               {channel.isVerified && <span className="text-white/70">✓</span>}
-            </h1>
+            </button>
             <p className="text-sm text-white/60 mt-1">@{channel.username}</p>
             <p className="text-sm text-white/60 mt-2">
               {formatSubscriberCount(channel.subscriberCount)} · {shorts.length} videos · {formatViewCount(totalViews)} views
@@ -134,26 +139,36 @@ export default function ChannelPage() {
             <ClipGrid clips={shorts} />
           )}
         </div>
+      </div>
 
-        <section className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          <h3 className="text-lg font-semibold text-white">About</h3>
-          <p className="text-sm text-white/65 mt-2">{channel.displayName} shares short video content. Browse all videos above and tap any item to open it in the Shorts player.</p>
-          <div className="grid grid-cols-3 gap-3 mt-5">
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
-              <p className="text-lg font-bold text-white">{shorts.length}</p>
-              <p className="text-xs text-white/55">Videos</p>
+      {aboutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setAboutOpen(false)} aria-label="Close about" />
+          <div className="relative w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#0e0f14] p-5 sm:p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">About</h3>
+            <p className="text-sm text-white/65 mt-2">{channel.displayName} shares short video content. Browse all videos and tap any item to open it in the Shorts player.</p>
+            <div className="grid grid-cols-3 gap-3 mt-5">
+              <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+                <p className="text-lg font-bold text-white">{shorts.length}</p>
+                <p className="text-xs text-white/55">Videos</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+                <p className="text-lg font-bold text-white">{formatViewCount(totalViews)}</p>
+                <p className="text-xs text-white/55">Views</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+                <p className="text-lg font-bold text-white">{formatViewCount(channel.subscriberCount)}</p>
+                <p className="text-xs text-white/55">Subscribers</p>
+              </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
-              <p className="text-lg font-bold text-white">{formatViewCount(totalViews)}</p>
-              <p className="text-xs text-white/55">Views</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
-              <p className="text-lg font-bold text-white">{formatViewCount(channel.subscriberCount)}</p>
-              <p className="text-xs text-white/55">Subscribers</p>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => setAboutOpen(false)} className="px-4 py-2 rounded-full bg-white text-black text-sm font-semibold hover:opacity-90 transition-opacity">
+                Close
+              </button>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

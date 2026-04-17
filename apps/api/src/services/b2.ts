@@ -2,6 +2,12 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config.js";
 
+const DEFAULT_MEDIA_PREFIXES = ["video", "videos", "thumbnails"];
+
+function normalizePrefix(prefix: string) {
+  return prefix.trim().replace(/^\/+|\/+$/g, "");
+}
+
 const b2Client = new S3Client({
   region: env.B2_REGION,
   endpoint: env.B2_ENDPOINT,
@@ -54,4 +60,29 @@ export async function createDownloadUrl(fileKey: string, expiresInSec = 1800) {
   });
 
   return getSignedUrl(b2Client, command, { expiresIn: expiresInSec });
+}
+
+export async function ensureB2MediaPrefixes(prefixes: string[] = DEFAULT_MEDIA_PREFIXES) {
+  const normalized = Array.from(new Set(prefixes.map(normalizePrefix).filter(Boolean)));
+
+  if (normalized.length === 0) {
+    return [] as string[];
+  }
+
+  const createdKeys: string[] = [];
+
+  for (const prefix of normalized) {
+    const key = `${prefix}/.keep`;
+    const command = new PutObjectCommand({
+      Bucket: env.B2_BUCKET,
+      Key: key,
+      Body: "",
+      ContentType: "text/plain"
+    });
+
+    await b2Client.send(command);
+    createdKeys.push(key);
+  }
+
+  return createdKeys;
 }

@@ -15,6 +15,7 @@ Starts PostgreSQL (port 5434) and Redis (port 6380).
 cd apps/api
 npm install
 npm run prisma:push
+npm run setup:storage-db
 npm run dev
 ```
 ✅ Backend runs on: [http://localhost:4000/api](http://localhost:4000/api)

@@ -14,6 +14,7 @@ import postsRoutes from "./routes/posts.js";
 import userRoutes from "./routes/users.js";
 import searchRoutes from "./routes/search.js";
 import streamsRoutes from "./routes/streams.js";
+import { ensureB2MediaPrefixes } from "./services/b2.js";
 import { env } from "./config.js";
 
 function buildAllowedOrigins() {
@@ -86,7 +87,34 @@ export async function buildServer() {
   await app.register(firebasePlugin);
   await app.register(requestContextPlugin);
 
-  app.get("/health", async () => ({ ok: true }));
+  app.get("/health", async (_request, reply) => {
+    let postgres = false;
+    let redis = false;
+
+    try {
+      await app.prisma.$queryRaw`SELECT 1`;
+      postgres = true;
+    } catch {
+      postgres = false;
+    }
+
+    try {
+      const pong = await app.redis.ping();
+      redis = pong === "PONG";
+    } catch {
+      redis = false;
+    }
+
+    const ok = postgres && redis;
+    return reply.code(ok ? 200 : 503).send({ ok, checks: { postgres, redis } });
+  });
+
+  try {
+    const keys = await ensureB2MediaPrefixes();
+    app.log.info({ keys }, "Ensured B2 media prefixes");
+  } catch (error) {
+    app.log.warn({ error: String(error) }, "Failed to ensure B2 media prefixes at startup");
+  }
 
   await app.register(async (api) => {
     await api.register(authRoutes, { prefix: "/auth" });

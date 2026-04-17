@@ -21,7 +21,6 @@ const navSections = [
       { icon: Bookmark, label: "Watch later", path: "/saved", protected: true },
       { icon: ThumbsUp, label: "Liked videos", path: "/liked", protected: true },
       { icon: ListVideo, label: "My playlists", path: "/playlists", protected: true },
-      { icon: MonitorPlay, label: "My channels", path: "/my-channels", protected: true },
       { icon: LayoutDashboard, label: "Creator dashboard", path: "/dashboard", protected: true },
     ]
   },

@@ -171,6 +171,11 @@ export default function UploadPage() {
       return;
     }
 
+    if (!/\.mp4$/i.test(next.name)) {
+      setError("Only MP4 files are allowed for user uploads.");
+      return;
+    }
+
     if (next.size > MAX_VIDEO_UPLOAD_BYTES) {
       setError(`Video is too large. Max allowed size is ${formatBytes(MAX_VIDEO_UPLOAD_BYTES)}.`);
       return;
@@ -358,12 +363,12 @@ export default function UploadPage() {
             <button className="px-8 py-3.5 rounded-full bg-white text-black font-semibold text-sm hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
               Select video file
             </button>
-            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">One video at a time • Supported: MP4, WebM, MOV • Max 100MB</p>
+            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">One MP4 at a time • Max 100MB</p>
           </div>
           <input
             id="upload-file-input"
             type="file"
-            accept="video/*"
+            accept=".mp4,video/mp4"
             disabled={uploading}
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}

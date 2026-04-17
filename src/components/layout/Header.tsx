@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, Bell, Upload, Menu, Users, LayoutDashboard, Database, Settings, Moon, HelpCircle, LogOut } from "lucide-react";
+import { Search, Bell, Upload, Menu, LayoutDashboard, Database, Settings, Moon, HelpCircle, LogOut } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
 import { isAuthenticated, signOutLocal } from "@/lib/auth";
@@ -245,9 +245,6 @@ export default function Header() {
                   </Link>
                 </div>
                 <div className="pt-2 pb-2 space-y-1">
-                  <Link to="/subscriptions" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground">
-                    <Users size={18} className="text-muted-foreground" /> My channels
-                  </Link>
                   <Link to="/dashboard" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover rounded-xl text-sm transition-colors text-foreground">
                     <LayoutDashboard size={18} className="text-muted-foreground" /> Creator dashboard
                   </Link>

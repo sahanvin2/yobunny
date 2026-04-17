@@ -40,6 +40,7 @@ const VISIBILITY_VALUES = ["PUBLIC", "PRIVATE", "UNLISTED"] as const;
 const AUTO_CLIP_TAG = "__AUTO_CLIP__";
 const UPLOAD_SESSION_TAG_PREFIX = "__UPLOAD_SESSION__:";
 const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
+const USER_UPLOAD_EXTENSIONS = new Set(["mp4"]);
 const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
 const MODEL_TAG_PREFIX = "__MODEL__:";
 const MODEL_BROWSE_SCAN_LIMIT = 1600;
@@ -558,6 +559,11 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!(videoUpload.mimetype || "").startsWith("video/")) {
       return reply.code(400).send({ error: "Invalid video format", code: "VALIDATION_ERROR" });
+    }
+
+    const userUploadExt = (videoUpload.filename.split(".").pop() || "mp4").toLowerCase();
+    if (!USER_UPLOAD_EXTENSIONS.has(userUploadExt)) {
+      return reply.code(400).send({ error: "Only MP4 uploads are allowed", code: "INVALID_UPLOAD_FORMAT" });
     }
 
     if (videoUpload.buffer.length > MAX_UPLOAD_BYTES) {

@@ -10,7 +10,6 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const ChannelPage = lazy(() => import("./pages/ChannelPage"));
-const ChannelSettingsPage = lazy(() => import("./pages/ChannelSettingsPage"));
 const DashboardCommentsPage = lazy(() => import("./pages/DashboardCommentsPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const DiscoverPage = lazy(() => import("./pages/DiscoverPage"));
@@ -19,7 +18,6 @@ const HistoryPage = lazy(() => import("./pages/HistoryPage"));
 const Index = lazy(() => import("./pages/Index"));
 const LikedPage = lazy(() => import("./pages/LikedPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
-const MyChannelsPage = lazy(() => import("./pages/MyChannelsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ModelPage = lazy(() => import("./pages/ModelPage"));
@@ -140,17 +138,7 @@ const App = () => (
                 <Route
                   path="/my-channels"
                   element={
-                    <ProtectedRoute>
-                      <MyChannelsPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/my-channels/:channelId/settings"
-                  element={
-                    <ProtectedRoute>
-                      <ChannelSettingsPage />
-                    </ProtectedRoute>
+                    <Navigate to="/models/leia-von" replace />
                   }
                 />
                 <Route path="/kids" element={<ClipsPage />} />

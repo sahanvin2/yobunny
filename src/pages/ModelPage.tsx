@@ -47,7 +47,7 @@ export default function ModelPage() {
   const shorts = useMemo(() => items.filter((video) => isClipLikeVideo(video)), [items]);
 
   if (loading) {
-    return <div className="p-4 sm:p-6 text-sm text-white/65">Loading model feed...</div>;
+    return <div className="p-4 sm:p-6 text-sm text-white/65">Loading model profile...</div>;
   }
 
   if (error) {
@@ -85,7 +85,7 @@ export default function ModelPage() {
           <div className="p-6 lg:p-8">
             <p className="text-xs uppercase tracking-widest text-white/55">Model Profile</p>
             <h1 className="text-3xl font-bold text-white mt-2">{model.name}</h1>
-            <p className="text-sm text-white/60 mt-2">Videos from multiple creators tagged with this model.</p>
+            <p className="text-sm text-white/60 mt-2">Videos tagged with this model profile.</p>
 
             <div className="grid grid-cols-3 gap-3 mt-6 max-w-xl">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center">

@@ -4,7 +4,7 @@ import ProtectedLink from "@/components/auth/ProtectedLink";
 
 const items = [
   { icon: Scissors, label: "Shorts", path: "/clips" },
-  { icon: Home, label: "Discover", path: "/home" },
+  { icon: Home, label: "Discover", path: "/discover" },
   { icon: Plus, label: "Upload", path: "/upload", isUpload: true, protected: true },
   { icon: Users, label: "Subs", path: "/subscriptions" },
   { icon: Search, label: "Search", path: "/search" },

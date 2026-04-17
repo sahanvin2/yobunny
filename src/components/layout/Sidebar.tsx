@@ -12,7 +12,7 @@ const navSections = [
     items: [
       { icon: Scissors, label: "Shorts", path: "/clips" },
       { icon: Radio, label: "Streams", path: "/streams" },
-      { icon: Home, label: "Discover", path: "/home" },
+      { icon: Home, label: "Discover", path: "/discover" },
       { icon: TrendingUp, label: "Trending", path: "/trending" },
     ]
   },
@@ -54,7 +54,7 @@ export default function Sidebar() {
       }`}
     >
       <div className="flex items-center justify-between h-[60px] px-4 gap-2">
-        <Link to="/clips" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
+        <Link to="/discover" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
           <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 flex-shrink-0 rounded-md" width={32} height={32} loading="eager" decoding="async" />
           {!collapsed && (
             <span className="text-foreground font-bold text-lg tracking-tight group-hover:text-primary transition-colors">

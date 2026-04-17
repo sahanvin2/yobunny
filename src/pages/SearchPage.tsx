@@ -1,7 +1,7 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { formatViewCount, formatDuration, formatRelativeTime, type VideoData } from "@/lib/mockData";
-import { fetchSearchChannels, fetchSearchVideos } from "@/lib/api";
+import { fetchSearchChannels, fetchSearchModels, fetchSearchVideos, type ApiModelSummary } from "@/lib/api";
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -27,9 +27,10 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
   const [query, setQuery] = useState(initialQuery);
-  const [type, setType] = useState<"videos" | "channels">("videos");
+  const [type, setType] = useState<"videos" | "channels" | "models">("videos");
   const [videoResults, setVideoResults] = useState<VideoData[]>([]);
   const [channelResults, setChannelResults] = useState<Array<{ username: string; displayName: string; avatarUrl: string | null; subscriberCount: number; isVerified?: boolean }>>([]);
+  const [modelResults, setModelResults] = useState<ApiModelSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,6 +38,7 @@ export default function SearchPage() {
     if (!query.trim()) {
       setVideoResults([]);
       setChannelResults([]);
+      setModelResults([]);
       return;
     }
 
@@ -47,7 +49,8 @@ export default function SearchPage() {
         setError("");
         const [videos, channels] = await Promise.all([
           fetchSearchVideos(query, "relevance"),
-          fetchSearchChannels(query)
+          fetchSearchChannels(query),
+          fetchSearchModels(query)
         ]);
         if (!cancelled) {
           const rankedVideos = videos
@@ -61,6 +64,7 @@ export default function SearchPage() {
 
           setVideoResults(rankedVideos);
           setChannelResults(rankedChannels);
+          setModelResults(models.slice(0, 24));
         }
       } catch (err) {
         if (!cancelled) {
@@ -79,6 +83,7 @@ export default function SearchPage() {
 
   const visibleVideoResults = useMemo(() => videoResults.slice(0, 24), [videoResults]);
   const visibleChannelResults = useMemo(() => channelResults.slice(0, 24), [channelResults]);
+  const visibleModelResults = useMemo(() => modelResults.slice(0, 24), [modelResults]);
 
   return (
     <div className="p-4 lg:p-6 max-w-5xl space-y-6">
@@ -98,7 +103,7 @@ export default function SearchPage() {
 
       <div className="flex items-center justify-between mb-4 gap-3">
         <p className="text-sm text-muted-foreground">
-          {type === "videos" ? visibleVideoResults.length : visibleChannelResults.length} results{query && ` for "${query}"`}
+          {type === "videos" ? visibleVideoResults.length : type === "channels" ? visibleChannelResults.length : visibleModelResults.length} results{query && ` for "${query}"`}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -112,6 +117,12 @@ export default function SearchPage() {
             className={`h-8 px-3 rounded-full text-xs font-medium ${type === "channels" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
           >
             Channels
+          </button>
+          <button
+            onClick={() => setType("models")}
+            className={`h-8 px-3 rounded-full text-xs font-medium ${type === "models" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+          >
+            Models
           </button>
         </div>
       </div>
@@ -157,6 +168,24 @@ export default function SearchPage() {
 
         {type === "channels" && visibleChannelResults.length === 0 && (
           <p className="text-sm text-muted-foreground">No channels found.</p>
+        )}
+
+        {type === "models" && visibleModelResults.map((model) => (
+          <Link key={model.slug} to={`/models/${model.slug}`} className="flex items-center gap-4 p-3 rounded-2xl bg-surface hover:bg-surface-hover transition-colors border border-border/60">
+            {model.thumbnailUrl ? (
+              <img src={model.thumbnailUrl} alt={model.name} className="w-14 h-14 rounded-2xl bg-background border border-border/60 object-cover" loading="lazy" decoding="async" width={56} height={56} />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-background border border-border/60" />
+            )}
+            <div>
+              <p className="text-sm font-semibold text-foreground">{model.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">{model.videoCount} videos · {formatViewCount(model.totalViews)} views</p>
+            </div>
+          </Link>
+        ))}
+
+        {type === "models" && visibleModelResults.length === 0 && (
+          <p className="text-sm text-muted-foreground">No models found.</p>
         )}
 
         {type === "videos" && visibleVideoResults.length === 0 && (

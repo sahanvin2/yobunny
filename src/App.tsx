@@ -13,6 +13,7 @@ const ChannelPage = lazy(() => import("./pages/ChannelPage"));
 const ChannelSettingsPage = lazy(() => import("./pages/ChannelSettingsPage"));
 const DashboardCommentsPage = lazy(() => import("./pages/DashboardCommentsPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const DiscoverPage = lazy(() => import("./pages/DiscoverPage"));
 const EditVideoPage = lazy(() => import("./pages/EditVideoPage"));
 const HistoryPage = lazy(() => import("./pages/HistoryPage"));
 const Index = lazy(() => import("./pages/Index"));
@@ -21,6 +22,7 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MyChannelsPage = lazy(() => import("./pages/MyChannelsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const ModelPage = lazy(() => import("./pages/ModelPage"));
 const PlaylistsPage = lazy(() => import("./pages/PlaylistsPage"));
 const SavedPage = lazy(() => import("./pages/SavedPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
@@ -55,8 +57,9 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route element={<MainLayout />}>
-                <Route path="/" element={<ClipsPage />} />
+                <Route path="/" element={<Index />} />
                 <Route path="/home" element={<Index />} />
+                <Route path="/discover" element={<DiscoverPage />} />
                 <Route path="/watch/:id" element={<WatchPage />} />
                 <Route
                   path="/upload"
@@ -127,6 +130,7 @@ const App = () => (
                 <Route path="/trending" element={<TrendingPage />} />
                 <Route path="/clips" element={<ClipsPage />} />
                 <Route path="/clips/:id" element={<ClipsPage />} />
+                <Route path="/models/:slug" element={<ModelPage />} />
                 <Route path="/streams" element={<StreamsPage />} />
                 <Route path="/live" element={<StreamsPage />} />
                 <Route

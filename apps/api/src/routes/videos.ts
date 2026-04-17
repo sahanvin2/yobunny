@@ -42,7 +42,45 @@ const UPLOAD_SESSION_TAG_PREFIX = "__UPLOAD_SESSION__:";
 const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 const TRANSCODED_KEY_PREFIX = "local/transcoded";
 const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
+const MODEL_TAG_PREFIX = "__MODEL__:";
+const MODEL_BROWSE_SCAN_LIMIT = 1600;
 const transcodeLocks = new Map<string, Promise<void>>();
+
+function normalizeModelSlug(input: string) {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function titleCaseFromSlug(slug: string) {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function toModelTag(slug: string) {
+  return `${MODEL_TAG_PREFIX}${slug}`;
+}
+
+function extractModelSlugs(tags: string[]) {
+  const out = new Set<string>();
+  for (const raw of tags) {
+    if (!raw.startsWith(MODEL_TAG_PREFIX)) continue;
+    const slug = normalizeModelSlug(raw.slice(MODEL_TAG_PREFIX.length));
+    if (slug) out.add(slug);
+  }
+  return [...out];
+}
+
+function hasModelTags(tags: string[]) {
+  return extractModelSlugs(tags).length > 0;
+}
 
 function extFromKey(key: string) {
   return (key.split(".").pop() || "").toLowerCase();
@@ -242,6 +280,7 @@ const uploadUrlSchema = z.object({
   title: z.string().min(1).max(150),
   category: z.enum(CATEGORY_VALUES),
   fileExt: z.string().min(2).max(10).default("mp4"),
+  modelNames: z.array(z.string().min(1).max(80)).min(1),
   creatorChannelId: z.string().min(2).max(120)
 });
 
@@ -342,6 +381,104 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     return { items };
   });
 
+  fastify.get("/models", async (request, reply) => {
+    const q = String((request.query as { q?: string }).q || "").trim().toLowerCase();
+    const limit = Math.min(Math.max(Number((request.query as { limit?: string | number }).limit || 40), 1), 80);
+
+    const items = await fastify.prisma.video.findMany({
+      where: {
+        status: "READY",
+        visibility: "PUBLIC"
+      },
+      select: {
+        id: true,
+        tags: true,
+        viewCount: true,
+        thumbnailUrl: true,
+        publishedAt: true,
+        createdAt: true
+      },
+      orderBy: { publishedAt: "desc" },
+      take: MODEL_BROWSE_SCAN_LIMIT
+    });
+
+    const index = new Map<string, { slug: string; name: string; videoCount: number; totalViews: number; thumbnailUrl: string | null; latestAt: number }>();
+    for (const item of items) {
+      const slugs = extractModelSlugs(item.tags);
+      for (const slug of slugs) {
+        const existing = index.get(slug);
+        const publishedAt = new Date(item.publishedAt || item.createdAt).getTime();
+        if (!existing) {
+          index.set(slug, {
+            slug,
+            name: titleCaseFromSlug(slug),
+            videoCount: 1,
+            totalViews: item.viewCount,
+            thumbnailUrl: item.thumbnailUrl || null,
+            latestAt: publishedAt
+          });
+          continue;
+        }
+
+        existing.videoCount += 1;
+        existing.totalViews += item.viewCount;
+        if (!existing.thumbnailUrl && item.thumbnailUrl) {
+          existing.thumbnailUrl = item.thumbnailUrl;
+        }
+        existing.latestAt = Math.max(existing.latestAt, publishedAt);
+      }
+    }
+
+    const result = [...index.values()]
+      .filter((entry) => {
+        if (!q) return true;
+        return entry.slug.includes(q.replace(/\s+/g, "-")) || entry.name.toLowerCase().includes(q);
+      })
+      .sort((a, b) => b.videoCount - a.videoCount || b.totalViews - a.totalViews || b.latestAt - a.latestAt)
+      .slice(0, limit)
+      .map(({ latestAt, ...entry }) => entry);
+
+    reply.header("Cache-Control", "public, max-age=120");
+    return { items: result };
+  });
+
+  fastify.get("/models/:slug", async (request, reply) => {
+    const slug = normalizeModelSlug((request.params as { slug: string }).slug);
+    if (!slug) {
+      return reply.code(400).send({ error: "Invalid model slug", code: "VALIDATION_ERROR" });
+    }
+
+    const allVideos = await fastify.prisma.video.findMany({
+      where: {
+        status: "READY",
+        visibility: "PUBLIC"
+      },
+      include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } },
+      orderBy: { publishedAt: "desc" },
+      take: MODEL_BROWSE_SCAN_LIMIT
+    });
+
+    const modelVideos = allVideos.filter((video) => extractModelSlugs(video.tags).includes(slug));
+    if (modelVideos.length === 0) {
+      return reply.code(404).send({ error: "Model not found", code: "NOT_FOUND" });
+    }
+
+    const creatorIds = new Set(modelVideos.map((video) => video.userId));
+    const totalViews = modelVideos.reduce((sum, video) => sum + video.viewCount, 0);
+
+    return {
+      model: {
+        slug,
+        name: titleCaseFromSlug(slug),
+        videoCount: modelVideos.length,
+        creatorCount: creatorIds.size,
+        totalViews,
+        thumbnailUrl: modelVideos.find((video) => video.thumbnailUrl)?.thumbnailUrl || null
+      },
+      items: modelVideos
+    };
+  });
+
   fastify.get("/:id", async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const video = await fastify.prisma.video.findUnique({
@@ -391,13 +528,23 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: "Please choose a channel before uploading", code: "CHANNEL_REQUIRED" });
     }
 
+    const modelTags = Array.from(
+      new Set(parsed.data.modelNames.map((name) => normalizeModelSlug(name)).filter(Boolean).map((slug) => toModelTag(slug)))
+    );
+    if (modelTags.length === 0) {
+      return reply.code(400).send({ error: "Please add at least one model tag", code: "MODEL_REQUIRED" });
+    }
+
+    const channelTag = `__CHANNEL__:${creatorChannelId}`;
+    const tags = [channelTag, ...modelTags].slice(0, 30);
+
     const video = await fastify.prisma.video.create({
       data: {
         title: parsed.data.title,
         rawFileKey: "pending",
         status: "UPLOADING",
         category: parsed.data.category,
-        tags: [`__CHANNEL__:${creatorChannelId}`],
+        tags,
         userId: dbUser.id
       }
     });
@@ -476,6 +623,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const visibilityRaw = String(fields.visibility || "PUBLIC").toUpperCase();
     const description = String(fields.description || "").trim() || undefined;
     const tagsRaw = String(fields.tags || "");
+    const modelNamesRaw = String(fields.modelNames || "");
     const creatorChannelId = String(fields.creatorChannelId || "").trim();
     const uploadSessionId = String(request.headers["x-upload-session-id"] ?? fields.uploadSessionId ?? "").trim();
     const videoWidth = Number.parseInt(String(fields.videoWidth || "0"), 10) || 0;
@@ -526,12 +674,28 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       const parsedTags = tagsRaw
         .split(",")
         .map((tag) => tag.trim())
+        .filter((tag) => !tag.startsWith(MODEL_TAG_PREFIX))
         .filter((tag) => !tag.startsWith("__UPLOAD_SESSION__:"))
         .filter(Boolean)
         .slice(0, 30);
 
+      const parsedModelTags = Array.from(
+        new Set(
+          modelNamesRaw
+            .split(",")
+            .map((name) => normalizeModelSlug(name))
+            .filter(Boolean)
+            .map((slug) => toModelTag(slug))
+        )
+      );
+
+      if (parsedModelTags.length === 0) {
+        return reply.code(400).send({ error: "Please add at least one model tag", code: "MODEL_REQUIRED" });
+      }
+
       const channelTag = creatorChannelId ? `__CHANNEL__:${creatorChannelId}` : "";
-      const tagsWithChannel = channelTag && !parsedTags.includes(channelTag) ? [channelTag, ...parsedTags] : parsedTags;
+      const baseTags = [...parsedModelTags, ...parsedTags].slice(0, 30);
+      const tagsWithChannel = channelTag && !baseTags.includes(channelTag) ? [channelTag, ...baseTags] : baseTags;
       const tagsWithSession = uploadSessionTag && !tagsWithChannel.includes(uploadSessionTag)
         ? [uploadSessionTag, ...tagsWithChannel]
         : tagsWithChannel;
@@ -917,6 +1081,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const video = await fastify.prisma.video.findUnique({ where: { id } });
     if (!video || video.userId !== dbUser.id) {
       return reply.code(403).send({ error: "Forbidden", code: "FORBIDDEN" });
+    }
+
+    if (parsed.data.tags && !hasModelTags(parsed.data.tags)) {
+      return reply.code(400).send({ error: "At least one model tag is required", code: "MODEL_REQUIRED" });
     }
 
     const updated = await fastify.prisma.video.update({ where: { id }, data: parsed.data });

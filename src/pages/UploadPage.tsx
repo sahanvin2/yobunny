@@ -125,6 +125,7 @@ export default function UploadPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("ENTERTAINMENT");
   const [visibility, setVisibility] = useState("PUBLIC");
+  const [modelNames, setModelNames] = useState("");
   const [tags, setTags] = useState("");
   const [userId, setUserId] = useState("");
   const [channels, setChannels] = useState<CreatorChannel[]>([]);
@@ -259,6 +260,15 @@ export default function UploadPage() {
       return;
     }
 
+    const parsedModels = modelNames
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+    if (parsedModels.length === 0) {
+      setError("Please add at least one model name.");
+      return;
+    }
+
     try {
       uploadLockRef.current = true;
       setUploading(true);
@@ -278,6 +288,7 @@ export default function UploadPage() {
         formData.append("creatorChannelId", selectedChannelId);
         formattedTags.push(`__CHANNEL__:${selectedChannelId}`);
       }
+      formData.append("modelNames", parsedModels.join(","));
       formData.append("tags", formattedTags.join(","));
       if (videoMeta) {
         formData.append("videoDuration", String(Math.round(videoMeta.duration || 0)));
@@ -602,6 +613,17 @@ export default function UploadPage() {
               <option value="PRIVATE" className="bg-background text-white">Private - Only you can view</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-white mb-2 ml-1">Models (required)</label>
+          <input
+            value={modelNames}
+            onChange={(e) => setModelNames(e.target.value)}
+            placeholder="alice, cherry moon (comma separated)"
+            className="w-full h-14 px-5 rounded-2xl bg-black/40 border border-white/10 text-white text-base focus:outline-none focus:border-white/30 transition-all placeholder:text-white/20 shadow-inner"
+          />
+          <p className="text-xs text-white/45 mt-2 ml-1">Every upload must include at least one model tag.</p>
         </div>
 
         <div>

@@ -52,6 +52,23 @@ export type ApiLivestream = {
   user?: ApiUser;
 };
 
+export type ApiModelSummary = {
+  slug: string;
+  name: string;
+  videoCount: number;
+  totalViews: number;
+  thumbnailUrl: string | null;
+};
+
+export type ApiModelProfile = {
+  slug: string;
+  name: string;
+  videoCount: number;
+  creatorCount: number;
+  totalViews: number;
+  thumbnailUrl: string | null;
+};
+
 function mapUserToChannel(user?: ApiUser): VideoData["channel"] {
   return {
     username: user?.username || "unknown",
@@ -216,6 +233,36 @@ export async function fetchSearchChannels(query: string) {
   if (!res.ok) throw new Error("Failed to search channels");
   const data = await res.json() as { items: ApiUser[] };
   return data.items;
+}
+
+export async function fetchSearchModels(query: string) {
+  if (!query.trim()) return [] as ApiModelSummary[];
+  const res = await fetch(`${API_BASE}/videos/models?q=${encodeURIComponent(query)}&limit=24`);
+  if (!res.ok) throw new Error("Failed to search models");
+  const data = await res.json() as { items: ApiModelSummary[] };
+  return data.items;
+}
+
+export async function fetchModelSummaries(params?: { q?: string; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.q?.trim()) query.set("q", params.q.trim());
+  if (params?.limit) query.set("limit", String(params.limit));
+
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/videos/models${qs ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error("Failed to fetch models");
+  const data = await res.json() as { items: ApiModelSummary[] };
+  return data.items;
+}
+
+export async function fetchModelVideos(modelSlug: string) {
+  const res = await fetch(`${API_BASE}/videos/models/${encodeURIComponent(modelSlug)}`);
+  if (!res.ok) throw new Error("Model not found");
+  const data = await res.json() as { model: ApiModelProfile; items: ApiVideo[] };
+  return {
+    model: data.model,
+    items: data.items.map(mapApiVideoToVideoData)
+  };
 }
 
 export async function fetchVideoById(id: string) {

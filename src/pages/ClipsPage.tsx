@@ -570,7 +570,7 @@ export default function ClipsPage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/home")}
+              onClick={() => navigate("/discover")}
               className="px-3 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold hover:bg-black/75"
             >
               Discover

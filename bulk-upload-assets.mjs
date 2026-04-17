@@ -19,6 +19,7 @@ const FORCE_UPLOAD = ["1", "true", "yes"].includes(String(process.env.FORCE_UPLO
 const UPLOAD_CONCURRENCY = Math.min(Math.max(Number.parseInt(process.env.UPLOAD_CONCURRENCY ?? "4", 10) || 4, 1), 16);
 const REMOTE_TITLE_CHECK = ["1", "true", "yes"].includes(String(process.env.REMOTE_TITLE_CHECK ?? "false").toLowerCase());
 const SIGNATURE_MODE = String(process.env.SIGNATURE_MODE ?? "quick").toLowerCase() === "sha1" ? "sha1" : "quick";
+const MODEL_NAMES_RAW = String(process.env.MODEL_NAMES ?? "").trim();
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"]);
 const TAG_STOP_WORDS = new Set([
@@ -323,7 +324,19 @@ async function collectVideoFiles(dir) {
   return out.sort((a, b) => a.localeCompare(b));
 }
 
-async function uploadOne(filePath, index, total, creatorChannelId, signature) {
+function deriveModelNames(assetsDir) {
+  if (MODEL_NAMES_RAW) {
+    return MODEL_NAMES_RAW
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
+
+  const fallback = path.basename(path.resolve(assetsDir)).replace(/[_-]+/g, " ").trim();
+  return fallback ? [fallback] : [];
+}
+
+async function uploadOne(filePath, index, total, creatorChannelId, signature, modelNames) {
   const fileName = path.basename(filePath);
   const title = toCleanTitle(fileName);
   const description = toDescription(title);
@@ -355,6 +368,7 @@ async function uploadOne(filePath, index, total, creatorChannelId, signature) {
   form.append("visibility", "PUBLIC");
   form.append("description", description);
   form.append("tags", tags.join(","));
+  form.append("modelNames", modelNames.join(","));
   form.append("creatorChannelId", creatorChannelId);
   if (uploadSessionId) {
     form.append("uploadSessionId", uploadSessionId);
@@ -421,6 +435,13 @@ async function main() {
   console.log(`Upload concurrency: ${UPLOAD_CONCURRENCY}`);
   console.log(`Signature mode: ${SIGNATURE_MODE}`);
   console.log(`Remote title check: ${REMOTE_TITLE_CHECK ? "enabled" : "disabled"}`);
+
+  const modelNames = deriveModelNames(absoluteAssetsDir);
+  if (modelNames.length === 0) {
+    console.error("MODEL_NAMES is required or source folder name must be usable as model name.");
+    return 1;
+  }
+  console.log(`Model tags: ${modelNames.join(", ")}`);
 
   const creatorChannelId = await resolveCreatorChannelId();
   console.log(`Creator channel: ${creatorChannelId}`);
@@ -558,7 +579,7 @@ async function main() {
       while (attempt < MAX_RETRIES) {
         attempt += 1;
         try {
-          uploaded = await uploadOne(filePath, index, files.length, creatorChannelId, signature);
+          uploaded = await uploadOne(filePath, index, files.length, creatorChannelId, signature, modelNames);
           break;
         } catch (error) {
           if (attempt >= MAX_RETRIES) {

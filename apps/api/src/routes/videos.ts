@@ -40,20 +40,25 @@ const VISIBILITY_VALUES = ["PUBLIC", "PRIVATE", "UNLISTED"] as const;
 const AUTO_CLIP_TAG = "__AUTO_CLIP__";
 const UPLOAD_SESSION_TAG_PREFIX = "__UPLOAD_SESSION__:";
 const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
-const TRANSCODED_KEY_PREFIX = "local/transcoded";
 const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
 const MODEL_TAG_PREFIX = "__MODEL__:";
 const MODEL_BROWSE_SCAN_LIMIT = 1600;
-const transcodeLocks = new Map<string, Promise<void>>();
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 function normalizeModelSlug(input: string) {
-  return input
+  const normalized = input
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+
+  if (normalized === "cherry-moon") {
+    return "leia-von";
+  }
+
+  return normalized;
 }
 
 function titleCaseFromSlug(slug: string) {
@@ -92,64 +97,6 @@ function mimeTypeFromExt(ext: string) {
   return "video/mp4";
 }
 
-async function withTranscodeLock(lockKey: string, work: () => Promise<void>) {
-  const existing = transcodeLocks.get(lockKey);
-  if (existing) {
-    await existing;
-    return;
-  }
-
-  const current = work().finally(() => {
-    transcodeLocks.delete(lockKey);
-  });
-
-  transcodeLocks.set(lockKey, current);
-  await current;
-}
-
-async function transcodeToMp4(inputPath: string, outputPath: string) {
-  const ffmpegBinary = ffmpegPath as unknown as string | null;
-  if (!ffmpegBinary) {
-    throw new Error("FFmpeg binary is not available");
-  }
-
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
-  await new Promise<void>((resolve, reject) => {
-    const ffmpeg = spawn(ffmpegBinary, [
-      "-y",
-      "-i",
-      inputPath,
-      "-movflags",
-      "+faststart",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "veryfast",
-      "-crf",
-      "23",
-      "-c:a",
-      "aac",
-      "-b:a",
-      "128k",
-      outputPath
-    ]);
-
-    let stderr = "";
-    ffmpeg.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-
-    ffmpeg.on("error", reject);
-    ffmpeg.on("close", (code: number | null) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`FFmpeg failed (${code}): ${stderr.slice(-300)}`));
-    });
-  });
-}
 
 async function createThumbnailFromVideoBuffer(videoBuffer: Buffer) {
   const ffmpegBinary = ffmpegPath as unknown as string | null;
@@ -256,17 +203,6 @@ async function createResponsiveThumbnail(imageBuffer: Buffer, width: number) {
     .resize({ width, withoutEnlargement: true })
     .webp({ quality: 72, effort: 4 })
     .toBuffer();
-}
-
-async function downloadToFile(url: string, filePath: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to download source video for transcoding");
-  }
-
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const content = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(filePath, content);
 }
 
 const paginationSchema = z.object({
@@ -624,6 +560,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: "Invalid video format", code: "VALIDATION_ERROR" });
     }
 
+    if (videoUpload.buffer.length > MAX_UPLOAD_BYTES) {
+      return reply.code(413).send({ error: "Video exceeds 100MB upload limit", code: "FILE_TOO_LARGE" });
+    }
+
     const title = String(fields.title || videoUpload.filename).trim();
     const categoryRaw = String(fields.category || "ENTERTAINMENT").toUpperCase();
     const visibilityRaw = String(fields.visibility || "PUBLIC").toUpperCase();
@@ -748,18 +688,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       // Upload to B2
       fastify.log.info({ fileSize: buffer.length }, "Saving to B2 storage");
       const videoKey = `videos/${video.id}/original.${ext}`;
-      try {
-        const b2VideoUploaded = await uploadObjectToB2(videoKey, buffer, videoUpload.mimetype || `video/${ext}`, 300000); // 5 mins timeout
-        storedRawFileKey = b2VideoUploaded.key;
-        playbackUrl = b2VideoUploaded.publicUrl;
-        fastify.log.info({ playbackUrl }, "Video saved to B2");
-      } catch (b2Error) {
-        fastify.log.error({ error: String(b2Error) }, "B2 upload failed, falling back to local");
-        const localKey = `local/${dbUser.id}/${video.id}/original.${ext}`;
-        await writeLocalObject(localKey, buffer);
-        storedRawFileKey = localKey;
-        playbackUrl = `http://localhost:4000/api/videos/${video.id}/stream`;
-      }
+      const b2VideoUploaded = await uploadObjectToB2(videoKey, buffer, videoUpload.mimetype || `video/${ext}`, 300000); // 5 mins timeout
+      storedRawFileKey = b2VideoUploaded.key;
+      playbackUrl = b2VideoUploaded.publicUrl;
+      fastify.log.info({ playbackUrl }, "Video saved to B2");
 
       let thumbnailUrl: string | undefined;
       if (thumbnailUpload) {
@@ -773,16 +705,8 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
           fastify.log.info({ thumbKey }, "Processing thumbnail");
 
-          // Try B2 thumbnail upload
-          try {
-            const thumbUploaded = await uploadObjectToB2(thumbKey, thumbBuffer, thumbMime, 15000);
-            thumbnailUrl = thumbUploaded.publicUrl;
-          } catch {
-            // Fall back to local for thumbnail
-            const localThumbKey = `local/${dbUser.id}/${video.id}/thumb.${thumbExt}`;
-            await writeLocalObject(localThumbKey, thumbBuffer);
-            thumbnailUrl = `http://localhost:4000/api/videos/${video.id}/thumbnail`;
-          }
+          const thumbUploaded = await uploadObjectToB2(thumbKey, thumbBuffer, thumbMime, 15000);
+          thumbnailUrl = thumbUploaded.publicUrl;
         } catch {
           fastify.log.warn("Thumbnail processing failed");
         }
@@ -794,14 +718,8 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
             const thumbVersion = Date.now();
             const thumbKey = `thumbnails/${video.id}/thumb-${thumbVersion}.${thumbExt}`;
 
-            try {
-              const uploaded = await uploadObjectToB2(thumbKey, generatedThumbBuffer, "image/webp", 15000);
-              thumbnailUrl = uploaded.publicUrl;
-            } catch {
-              const localThumbKey = `local/${dbUser.id}/${video.id}/thumb.${thumbExt}`;
-              await writeLocalObject(localThumbKey, generatedThumbBuffer);
-              thumbnailUrl = `http://localhost:4000/api/videos/${video.id}/thumbnail`;
-            }
+            const uploaded = await uploadObjectToB2(thumbKey, generatedThumbBuffer, "image/webp", 15000);
+            thumbnailUrl = uploaded.publicUrl;
           }
         } catch (thumbError) {
           fastify.log.warn({ error: String(thumbError), videoId: video.id }, "Auto thumbnail generation failed");
@@ -847,14 +765,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
     }
 
-    let url: string;
-
-    if (video.hlsBaseUrl?.includes(`/api/videos/${video.id}/stream`)) {
-      url = `http://localhost:4000/api/videos/${video.id}/download`;
-    } else {
-      url = await createDownloadUrl(video.rawFileKey, 1800);
-    }
-
+    const url = await createDownloadUrl(video.rawFileKey, 1800);
     return { url };
   });
 
@@ -887,41 +798,19 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
     }
 
-    const transcodedKey = `${TRANSCODED_KEY_PREFIX}/${video.id}.mp4`;
+    if (await hasLocalObject(video.rawFileKey)) {
+      const ext = extFromKey(video.rawFileKey);
+      if (!PLAYABLE_EXTENSIONS.has(ext)) {
+        return reply.code(415).send({ error: "Video format is not playable", code: "UNSUPPORTED_MEDIA" });
+      }
 
-    try {
-      await withTranscodeLock(transcodedKey, async () => {
-        if (await hasLocalObject(transcodedKey)) {
-          return;
-        }
-
-        const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `yobunny-playable-${video.id}-`));
-        const inputPath = path.join(tempDir, `input-${video.id}`);
-        const outputPath = path.join(tempDir, `output-${video.id}.mp4`);
-
-        try {
-          if (await hasLocalObject(video.rawFileKey)) {
-            await fs.copyFile(resolveLocalObjectPath(video.rawFileKey), inputPath);
-          } else {
-            const signedSourceUrl = await createDownloadUrl(video.rawFileKey, 1800);
-            await downloadToFile(signedSourceUrl, inputPath);
-          }
-
-          await transcodeToMp4(inputPath, outputPath);
-          const transcodedBuffer = await fs.readFile(outputPath);
-          await writeLocalObject(transcodedKey, transcodedBuffer);
-        } finally {
-          await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-        }
-      });
-    } catch (error) {
-      fastify.log.warn({ error: String(error), videoId: video.id }, "Playable transcode failed");
-      return reply.code(415).send({ error: "Video format is not playable yet", code: "UNSUPPORTED_MEDIA" });
+      reply.header("Content-Type", mimeTypeFromExt(ext));
+      reply.header("Cache-Control", "public, max-age=86400");
+      return reply.send(createReadStream(resolveLocalObjectPath(video.rawFileKey)));
     }
 
-    reply.header("Content-Type", "video/mp4");
-    reply.header("Cache-Control", "public, max-age=86400");
-    return reply.send(createReadStream(resolveLocalObjectPath(transcodedKey)));
+    const signedSourceUrl = await createDownloadUrl(video.rawFileKey, 900);
+    return reply.redirect(signedSourceUrl);
   });
 
   fastify.get("/:id/thumbnail", async (request, reply) => {
@@ -1042,13 +931,6 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
     }
 
-    const transcodedKey = `${TRANSCODED_KEY_PREFIX}/${video.id}.mp4`;
-    if (await hasLocalObject(transcodedKey)) {
-      reply.header("Content-Type", "application/octet-stream");
-      reply.header("Content-Disposition", `attachment; filename=\"${video.title.replace(/\s+/g, "_")}.mp4\"`);
-      return reply.send(createReadStream(resolveLocalObjectPath(transcodedKey)));
-    }
-
     const ext = extFromKey(video.rawFileKey) || "mp4";
     if (await hasLocalObject(video.rawFileKey)) {
       reply.header("Content-Type", "application/octet-stream");
@@ -1071,12 +953,12 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     await fastify.prisma.video.update({
       where: { id },
       data: {
-        status: "PROCESSING",
+        status: "READY",
         publishedAt: new Date()
       }
     });
 
-    return { queued: true, message: "Transcoding worker scaffolding is ready. Queue integration is next." };
+    return { queued: false, message: "Upload is complete and available without encoding." };
   });
 
   fastify.patch("/:id", { preHandler: requireAuth }, async (request, reply) => {

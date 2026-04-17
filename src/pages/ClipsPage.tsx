@@ -14,6 +14,39 @@ type OverlayPanel =
   | { type: "share"; videoId: string }
   | { type: "more"; videoId: string };
 
+const MODEL_TAG_PREFIX = "__MODEL__:";
+
+function normalizeModelSlug(raw: string) {
+  const normalized = raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  if (normalized === "cherry-moon") {
+    return "leia-von";
+  }
+  return normalized;
+}
+
+function modelNameFromSlug(slug: string) {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getPrimaryModel(video: VideoData) {
+  const modelTag = (video.tags || []).find((tag) => String(tag).startsWith(MODEL_TAG_PREFIX));
+  if (!modelTag) return null;
+  const slug = normalizeModelSlug(String(modelTag).slice(MODEL_TAG_PREFIX.length));
+  if (!slug) return null;
+  return { slug, name: modelNameFromSlug(slug) };
+}
+
 export default function ClipsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -351,6 +384,7 @@ export default function ClipsPage() {
       <div className="space-y-6">
         {shorts.map((video) => {
           const isActive = activeVideoId === video.id;
+          const primaryModel = getPrimaryModel(video);
           return (
             <section
               key={video.id}
@@ -380,9 +414,13 @@ export default function ClipsPage() {
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/70 via-transparent to-black/80" />
 
                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-                  <Link to={`/channel/${video.channel.username}`} className="text-sm font-semibold text-white/95 hover:text-white">
-                    @{video.channel.username}
-                  </Link>
+                  {primaryModel ? (
+                    <Link to={`/models/${primaryModel.slug}`} className="text-sm font-semibold text-white/95 hover:text-white">
+                      {primaryModel.name}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-semibold text-white/95">{video.channel.displayName}</span>
+                  )}
                   <p className="text-sm text-white mt-1 line-clamp-2">{video.title}</p>
                   <p className="text-xs text-white/70 mt-1">{formatViewCount(video.viewCount)} views • {formatRelativeTime(video.publishedAt)}</p>
                 </div>

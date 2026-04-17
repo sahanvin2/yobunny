@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CATEGORIES } from "@/lib/mockData";
 import { fetchMe, uploadVideoFile } from "@/lib/api";
-import { buildPrimaryChannel, getSelectedChannelId, loadChannels, setSelectedChannelId, type CreatorChannel } from "@/lib/channels";
+
+const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 interface VideoMetadata {
   duration: number;
@@ -127,8 +128,6 @@ export default function UploadPage() {
   const [visibility, setVisibility] = useState("PUBLIC");
   const [modelNames, setModelNames] = useState("");
   const [tags, setTags] = useState("");
-  const [userId, setUserId] = useState("");
-  const [channels, setChannels] = useState<CreatorChannel[]>([]);
   const [selectedChannelId, setSelectedChannelIdState] = useState("");
 
   const [progress, setProgress] = useState(0);
@@ -169,6 +168,11 @@ export default function UploadPage() {
     if (uploading) return;
     if (!next.type.startsWith("video/")) {
       setError("Please select a valid video file.");
+      return;
+    }
+
+    if (next.size > MAX_VIDEO_UPLOAD_BYTES) {
+      setError(`Video is too large. Max allowed size is ${formatBytes(MAX_VIDEO_UPLOAD_BYTES)}.`);
       return;
     }
 
@@ -221,16 +225,10 @@ export default function UploadPage() {
   useEffect(() => {
     void fetchMe()
       .then((user) => {
-        const primary = buildPrimaryChannel(user);
-        const userChannels = loadChannels(user.id, primary);
-        const selected = getSelectedChannelId(user.id, userChannels);
-        setUserId(user.id);
-        setChannels(userChannels);
-        setSelectedChannelIdState(selected);
+        setSelectedChannelIdState(`primary-${user.id}`);
+        setModelNames((prev) => prev.trim() || user.displayName || "Leia Von");
       })
       .catch(() => {
-        setUserId("");
-        setChannels([]);
         setSelectedChannelIdState("");
       });
   }, []);
@@ -256,7 +254,7 @@ export default function UploadPage() {
     }
 
     if (!selectedChannelId) {
-      setError("Please select a channel before uploading.");
+      setError("Model profile not ready yet. Please sign in again.");
       return;
     }
 
@@ -360,7 +358,7 @@ export default function UploadPage() {
             <button className="px-8 py-3.5 rounded-full bg-white text-black font-semibold text-sm hover:scale-105 active:scale-95 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
               Select video file
             </button>
-            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">One video at a time • Supported: MP4, WebM, MOV • Max 10GB</p>
+            <p className="text-xs font-medium text-white/40 mt-8 uppercase tracking-widest">One video at a time • Supported: MP4, WebM, MOV • Max 100MB</p>
           </div>
           <input
             id="upload-file-input"
@@ -570,20 +568,12 @@ export default function UploadPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-white mb-2 ml-1">Upload as channel</label>
-            <select
-              value={selectedChannelId}
-              onChange={(e) => {
-                setSelectedChannelIdState(e.target.value);
-                if (userId) setSelectedChannelId(userId, e.target.value);
-              }}
-              className="w-full h-14 px-5 rounded-2xl bg-black/40 border border-white/10 text-white text-base focus:outline-none focus:border-white/30 transition-all shadow-inner appearance-none relative"
-              style={{ backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 1rem center", backgroundSize: "1em" }}
-            >
-              {channels.map((channel) => (
-                <option key={channel.id} value={channel.id} className="bg-background text-white">{channel.name}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-semibold text-white mb-2 ml-1">Upload to model profile</label>
+            <input
+              value={modelNames.split(",")[0]?.trim() || "Leia Von"}
+              disabled
+              className="w-full h-14 px-5 rounded-2xl bg-black/40 border border-white/10 text-white/80 text-base shadow-inner"
+            />
           </div>
 
           <div>
@@ -620,10 +610,10 @@ export default function UploadPage() {
           <input
             value={modelNames}
             onChange={(e) => setModelNames(e.target.value)}
-            placeholder="alice, cherry moon (comma separated)"
+            placeholder="Leia Von"
             className="w-full h-14 px-5 rounded-2xl bg-black/40 border border-white/10 text-white text-base focus:outline-none focus:border-white/30 transition-all placeholder:text-white/20 shadow-inner"
           />
-          <p className="text-xs text-white/45 mt-2 ml-1">Every upload must include at least one model tag.</p>
+          <p className="text-xs text-white/45 mt-2 ml-1">Every upload must include at least one model tag. Cherry Moon is treated as Leia Von.</p>
         </div>
 
         <div>

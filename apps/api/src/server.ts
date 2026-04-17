@@ -12,7 +12,6 @@ import videosRoutes from "./routes/videos.js";
 import commentRoutes from "./routes/comments.js";
 import userRoutes from "./routes/users.js";
 import searchRoutes from "./routes/search.js";
-import streamsRoutes from "./routes/streams.js";
 import { ensureB2MediaPrefixes } from "./services/b2.js";
 import { env } from "./config.js";
 
@@ -77,7 +76,7 @@ export async function buildServer() {
 
   await app.register(multipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024 * 1024
+      fileSize: 100 * 1024 * 1024
     }
   });
 
@@ -121,7 +120,6 @@ export async function buildServer() {
     await api.register(commentRoutes);
     await api.register(userRoutes, { prefix: "/users" });
     await api.register(searchRoutes, { prefix: "/search" });
-    await api.register(streamsRoutes, { prefix: "/streams" });
   }, { prefix: "/api" });
 
   app.setErrorHandler((error, request, reply) => {

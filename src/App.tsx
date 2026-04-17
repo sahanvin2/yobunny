@@ -28,7 +28,6 @@ const SavedPage = lazy(() => import("./pages/SavedPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const ClipsPage = lazy(() => import("./pages/ClipsPage"));
-const StreamsPage = lazy(() => import("./pages/StreamsPage"));
 const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage"));
 const TrendingPage = lazy(() => import("./pages/TrendingPage"));
 const UploadPage = lazy(() => import("./pages/UploadPage"));
@@ -130,8 +129,6 @@ const App = () => (
                 <Route path="/clips" element={<ClipsPage />} />
                 <Route path="/clips/:id" element={<ClipsPage />} />
                 <Route path="/models/:slug" element={<ModelPage />} />
-                <Route path="/streams" element={<StreamsPage />} />
-                <Route path="/live" element={<StreamsPage />} />
                 <Route
                   path="/playlists"
                   element={

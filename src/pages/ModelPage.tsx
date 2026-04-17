@@ -1,18 +1,14 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import ClipGrid from "@/components/video/ClipGrid";
-import VideoGrid from "@/components/video/VideoGrid";
 import { fetchModelVideos, isClipLikeVideo, type ApiModelProfile } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
 import { sortFeedVideos } from "@/lib/videoFeed";
-
-type ModelTab = "all" | "shorts" | "videos";
 
 export default function ModelPage() {
   const { slug = "" } = useParams();
   const [model, setModel] = useState<ApiModelProfile | null>(null);
   const [items, setItems] = useState<VideoData[]>([]);
-  const [tab, setTab] = useState<ModelTab>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,13 +45,6 @@ export default function ModelPage() {
   }, [slug]);
 
   const shorts = useMemo(() => items.filter((video) => isClipLikeVideo(video)), [items]);
-  const landscape = useMemo(() => items.filter((video) => !isClipLikeVideo(video)), [items]);
-
-  const visibleItems = useMemo(() => {
-    if (tab === "shorts") return shorts;
-    if (tab === "videos") return landscape;
-    return items;
-  }, [items, landscape, shorts, tab]);
 
   if (loading) {
     return <div className="p-4 sm:p-6 text-sm text-white/65">Loading model feed...</div>;
@@ -125,50 +114,14 @@ export default function ModelPage() {
         </div>
       </section>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <button
-          type="button"
-          onClick={() => setTab("all")}
-          className={`h-10 px-4 rounded-full text-sm font-medium border whitespace-nowrap ${tab === "all" ? "bg-white text-black border-white" : "bg-black/30 border-white/20 text-white/80 hover:bg-white/10"}`}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("shorts")}
-          className={`h-10 px-4 rounded-full text-sm font-medium border whitespace-nowrap ${tab === "shorts" ? "bg-white text-black border-white" : "bg-black/30 border-white/20 text-white/80 hover:bg-white/10"}`}
-        >
-          Shorts
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("videos")}
-          className={`h-10 px-4 rounded-full text-sm font-medium border whitespace-nowrap ${tab === "videos" ? "bg-white text-black border-white" : "bg-black/30 border-white/20 text-white/80 hover:bg-white/10"}`}
-        >
-          Videos
-        </button>
-      </div>
-
-      {visibleItems.length === 0 && <p className="text-sm text-white/60">No videos tagged for this section yet.</p>}
-
-      {visibleItems.length > 0 && tab === "shorts" && <ClipGrid clips={shorts} />}
-      {visibleItems.length > 0 && tab === "videos" && <VideoGrid videos={landscape} />}
-      {visibleItems.length > 0 && tab === "all" && (
-        <div className="space-y-6">
-          {shorts.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-white">Shorts</h2>
-              <ClipGrid clips={shorts} mode="row" />
-            </section>
-          )}
-          {landscape.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-white">Videos</h2>
-              <VideoGrid videos={landscape} />
-            </section>
-          )}
-        </div>
-      )}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-white">Videos</h2>
+        {shorts.length === 0 ? (
+          <p className="text-sm text-white/60">No videos tagged for this model yet.</p>
+        ) : (
+          <ClipGrid clips={shorts} />
+        )}
+      </section>
     </div>
   );
 }

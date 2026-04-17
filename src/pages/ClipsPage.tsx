@@ -42,7 +42,7 @@ export default function ClipsPage() {
   const [panel, setPanel] = useState<OverlayPanel>({ type: "none" });
   const [playerReady, setPlayerReady] = useState(!Boolean(id));
 
-  const isPlayerMode = Boolean(id);
+  const isPlayerMode = true;
 
   const loadPage = useCallback(async (nextPage: number, replace = false) => {
     try {
@@ -340,48 +340,6 @@ export default function ClipsPage() {
     return <div className="p-4 lg:p-6 text-sm text-muted-foreground">No clips available yet.</div>;
   }
 
-  if (!isPlayerMode) {
-    return (
-      <div className="p-4 lg:p-8 space-y-6 max-w-[1800px] mx-auto">
-        <div>
-          <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-tight">Shorts</h1>
-          <p className="text-sm text-white/60 mt-2">Vertical videos optimized for mobile viewing.</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-3 lg:gap-4">
-          {shorts.map((video) => (
-            <Link
-              key={video.id}
-              to={`/clips/${video.id}`}
-              className="group rounded-2xl overflow-hidden border border-white/10 bg-black/30"
-            >
-              <div className="aspect-[9/16] relative">
-                <img
-                  src={video.thumbnailUrl}
-                  alt={video.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                  decoding="async"
-                  width={720}
-                  height={1280}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-2.5">
-                  <p className="text-xs font-semibold text-white line-clamp-2">{video.title}</p>
-                  <p className="text-[11px] text-white/75 mt-1">{formatViewCount(video.viewCount)} views</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        <div ref={gridSentinelRef} className="h-1 w-full" aria-hidden="true" />
-        {loadingMore && <p className="text-center text-sm text-white/60">Loading more...</p>}
-        {status && <p className="text-center text-xs text-white/70">{status}</p>}
-      </div>
-    );
-  }
-
   if (!playerReady) {
     return <div className="p-4 lg:p-6 text-sm text-muted-foreground">Opening selected clip...</div>;
   }
@@ -566,7 +524,7 @@ export default function ClipsPage() {
               onClick={() => navigate("/clips")}
               className="px-4 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold text-white hover:bg-black/80 transition-colors backdrop-blur-md"
             >
-              All Clips
+              Home
             </button>
             <button
               type="button"

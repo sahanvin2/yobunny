@@ -88,7 +88,7 @@ export default function DashboardPage() {
 
   const copyVideoLink = async (videoId: string) => {
     try {
-      const url = `${window.location.origin}/watch/${videoId}`;
+      const url = `${window.location.origin}/clips/${videoId}`;
       await navigator.clipboard.writeText(url);
       setError("");
       setMessage("Video link copied.");
@@ -98,7 +98,7 @@ export default function DashboardPage() {
   };
 
   const shareVideo = async (videoId: string, title: string) => {
-    const url = `${window.location.origin}/watch/${videoId}`;
+    const url = `${window.location.origin}/clips/${videoId}`;
     if (navigator.share) {
       try {
         await navigator.share({ title, url });
@@ -261,14 +261,14 @@ export default function DashboardPage() {
         <div className="divide-y divide-white/5 flex flex-col">
           {filteredVideos.map((v) => (
             <div key={v.id} className="flex flex-col xl:flex-row xl:items-center gap-6 px-8 py-6 hover:bg-white/[0.02] transition-colors group">
-              <Link to={`/watch/${v.id}`} className="relative group/thumb w-full xl:w-48 flex-shrink-0 block min-h-[108px]">
+              <Link to={`/clips/${v.id}`} className="relative group/thumb w-full xl:w-48 flex-shrink-0 block min-h-[108px]">
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity rounded-2xl flex items-center justify-center z-10 backdrop-blur-[2px]">
                   <Eye className="text-white w-8 h-8" />
                 </div>
                 <img src={v.thumbnailUrl} alt={v.title} className="w-full aspect-video rounded-2xl object-cover bg-black relative border border-white/10 shadow-lg" loading="lazy" decoding="async" width={640} height={360} sizes="(min-width: 1280px) 192px, 100vw" />
               </Link>
               <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <Link to={`/watch/${v.id}`} className="text-base font-bold text-white truncate hover:underline underline-offset-4 mb-2">{v.title}</Link>
+                <Link to={`/clips/${v.id}`} className="text-base font-bold text-white truncate hover:underline underline-offset-4 mb-2">{v.title}</Link>
                 <div className="flex items-center gap-4 text-xs font-semibold text-white/50 tracking-wide uppercase">
                   <span>{formatRelativeTime(v.publishedAt)}</span>
                   <span className="w-1 h-1 rounded-full bg-white/20" />

@@ -40,7 +40,7 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
   }, [menuOpen]);
 
   const runShare = async () => {
-    const url = `${window.location.origin}/watch/${video.id}`;
+    const url = `${window.location.origin}/clips/${video.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareStatus("Link copied!");
@@ -53,7 +53,7 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
 
   return (
     <div className="relative group/card animate-fade-in transition-all duration-500 hover:-translate-y-2 hover:z-10">
-      <Link to={`/watch/${video.id}`} className="group block">
+      <Link to={`/clips/${video.id}`} className="group block">
         <div className="relative aspect-video rounded-[1.5rem] overflow-hidden bg-[#111] mb-4 border border-white/5 shadow-lg group-hover/card:shadow-[0_20px_50px_rgba(0,0,0,0.5)] group-hover/card:border-white/10 transition-all duration-500">
           {!thumbnailFailed ? (
             <SmartImage
@@ -105,7 +105,7 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
             }}
           />
         </Link>
-        <Link to={`/watch/${video.id}`} className="flex-1 min-w-0 pr-6 group-hover/card:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">
+        <Link to={`/clips/${video.id}`} className="flex-1 min-w-0 pr-6 group-hover/card:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">
           <h3 className="text-[15px] font-bold text-white line-clamp-2 leading-[1.3] tracking-tight group-hover/card:text-white/90">
             {video.title}
           </h3>
@@ -161,9 +161,9 @@ export default function VideoCard({ video, priority = false }: VideoCardProps) {
                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowShareOptions(false); }} className="text-xs text-muted-foreground hover:text-foreground">Back</button>
                </div>
                <div className="flex gap-2 mb-3">
-                 <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin + '/watch/' + video.id)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity"><Facebook size={18} /></a>
-                 <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.origin + '/watch/' + video.id)}&text=${encodeURIComponent(video.title)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center hover:opacity-90 transition-opacity"><Twitter size={18} /></a>
-                 <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(video.title + " " + window.location.origin + '/watch/' + video.id)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center hover:opacity-90 transition-opacity"><MessageCircle size={18} /></a>
+                 <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin + '/clips/' + video.id)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity"><Facebook size={18} /></a>
+                 <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.origin + '/clips/' + video.id)}&text=${encodeURIComponent(video.title)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center hover:opacity-90 transition-opacity"><Twitter size={18} /></a>
+                 <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(video.title + " " + window.location.origin + '/clips/' + video.id)}`} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center hover:opacity-90 transition-opacity"><MessageCircle size={18} /></a>
                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); void runShare(); }} className="w-10 h-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center hover:opacity-90 transition-opacity border border-border"><LinkIcon size={18} /></button>
                </div>
                {shareStatus && <p className="text-xs font-medium text-primary text-center">{shareStatus}</p>}

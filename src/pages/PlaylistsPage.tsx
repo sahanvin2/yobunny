@@ -149,7 +149,7 @@ export default function PlaylistsPage() {
               <p className="text-sm text-muted-foreground mt-1">Switch tabs for playlist type, then click any item below to preview it here.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link to={`/watch/${playlistPlayer.id}`} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground">
+              <Link to={`/clips/${playlistPlayer.id}`} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground">
                 Open full watch page <ChevronRight size={16} />
               </Link>
               <Link to={`/channel/${playlistPlayer.channel.username}`} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold border border-border text-foreground bg-background hover:bg-surface-hover transition-colors">

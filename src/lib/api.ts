@@ -69,6 +69,18 @@ export type ApiModelProfile = {
   thumbnailUrl: string | null;
 };
 
+export type ApiCreatorSummary = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  subscriberCount: number;
+  isVerified?: boolean;
+  videoCount: number;
+  totalViews: number;
+  previewThumbnailUrl: string | null;
+};
+
 function mapUserToChannel(user?: ApiUser): VideoData["channel"] {
   return {
     username: user?.username || "unknown",
@@ -263,6 +275,20 @@ export async function fetchModelVideos(modelSlug: string) {
     model: data.model,
     items: data.items.map(mapApiVideoToVideoData)
   };
+}
+
+export async function fetchCreatorSummaries(params?: { category?: string; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.category && params.category !== "All") {
+    query.set("category", params.category.toUpperCase());
+  }
+  if (params?.limit) query.set("limit", String(params.limit));
+
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/users/creators${qs ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error("Failed to fetch creators");
+  const data = await res.json() as { items: ApiCreatorSummary[] };
+  return data.items;
 }
 
 export async function fetchVideoById(id: string) {

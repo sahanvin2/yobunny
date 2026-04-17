@@ -651,7 +651,7 @@ export default function UploadPage() {
           </button>
 
           {uploadedId && (
-            <Link to={`/watch/${uploadedId}`} className="text-sm text-foreground underline underline-offset-4">
+            <Link to={`/clips/${uploadedId}`} className="text-sm text-foreground underline underline-offset-4">
               View uploaded video
             </Link>
           )}

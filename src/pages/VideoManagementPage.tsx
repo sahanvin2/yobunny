@@ -145,7 +145,7 @@ export default function VideoManagementPage() {
                                   <RefreshCw size={16} />
                                 </button>
                               )}
-                              <Link to={`/watch/${v.id}`} className="p-2 aspect-square rounded-full bg-secondary text-secondary-foreground hover:bg-surface-hover-dark transition-colors" title="Watch on YoBunny">
+                              <Link to={`/clips/${v.id}`} className="p-2 aspect-square rounded-full bg-secondary text-secondary-foreground hover:bg-surface-hover-dark transition-colors" title="Watch on YoBunny">
                                 <Eye size={16} />
                               </Link>
                               <button onClick={() => void handleDelete(v.id)} disabled={workingId === v.id} className="p-2 aspect-square rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50" title="Delete">

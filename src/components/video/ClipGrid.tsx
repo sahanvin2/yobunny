@@ -13,7 +13,7 @@ export default function ClipGrid({ clips, mode = "grid" }: ClipGridProps) {
   return (
     <section>
       <div className={isRow ? "overflow-x-auto pb-2" : ""}>
-        <div className={isRow ? "flex gap-4 min-w-max snap-x snap-mandatory" : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"}>
+        <div className={isRow ? "flex gap-4 min-w-max snap-x snap-mandatory" : "grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"}>
           {clips.map((clip) => (
             <Link
               key={clip.id}

@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -32,7 +32,6 @@ const StreamsPage = lazy(() => import("./pages/StreamsPage"));
 const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage"));
 const TrendingPage = lazy(() => import("./pages/TrendingPage"));
 const UploadPage = lazy(() => import("./pages/UploadPage"));
-const WatchPage = lazy(() => import("./pages/WatchPage"));
 
 const GlobalHooks = () => {
   usePushNotifications();
@@ -57,10 +56,10 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route element={<MainLayout />}>
-                <Route path="/" element={<Index />} />
-                <Route path="/home" element={<Index />} />
+                <Route path="/" element={<ClipsPage />} />
+                <Route path="/home" element={<ClipsPage />} />
                 <Route path="/discover" element={<DiscoverPage />} />
-                <Route path="/watch/:id" element={<WatchPage />} />
+                <Route path="/watch/:id" element={<Navigate to="/clips" replace />} />
                 <Route
                   path="/upload"
                   element={

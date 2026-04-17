@@ -10,7 +10,7 @@ import ProtectedLink from "@/components/auth/ProtectedLink";
 const navSections = [
   {
     items: [
-      { icon: Scissors, label: "Shorts", path: "/clips" },
+      { icon: Scissors, label: "Home", path: "/" },
       { icon: Radio, label: "Streams", path: "/streams" },
       { icon: Home, label: "Discover", path: "/discover" },
       { icon: TrendingUp, label: "Trending", path: "/trending" },
@@ -54,7 +54,7 @@ export default function Sidebar() {
       }`}
     >
       <div className="flex items-center justify-between h-[60px] px-4 gap-2">
-        <Link to="/discover" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
           <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 flex-shrink-0 rounded-md" width={32} height={32} loading="eager" decoding="async" />
           {!collapsed && (
             <span className="text-foreground font-bold text-lg tracking-tight group-hover:text-primary transition-colors">
@@ -76,8 +76,8 @@ export default function Sidebar() {
           <div key={sIdx} className={`mb-3 ${sIdx !== navSections.length - 1 ? 'pb-3 border-b border-sidebar-border' : ''}`}>
             <div className="space-y-0.5">
               {section.items.map(({ icon: Icon, label, path, protected: isProtected }) => {
-                const active = path === "/clips"
-                  ? location.pathname === "/clips" || location.pathname.startsWith("/clips/")
+                const active = path === "/"
+                  ? location.pathname === "/" || location.pathname === "/home" || location.pathname === "/clips" || location.pathname.startsWith("/clips/")
                   : location.pathname === path;
                 const className = `flex items-center gap-4 px-4 py-3 rounded-2xl text-[14px] font-bold tracking-wide transition-all duration-300 ${
                   active

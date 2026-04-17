@@ -123,6 +123,89 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(404).send({ error: "Media not found", code: "NOT_FOUND" });
   });
 
+  fastify.get("/creators", async (request) => {
+    const categoryRaw = String((request.query as { category?: string }).category || "").trim().toUpperCase();
+    const limit = Math.min(Math.max(Number((request.query as { limit?: string | number }).limit || 24), 1), 60);
+
+    const grouped = await fastify.prisma.video.groupBy({
+      by: ["userId"],
+      where: {
+        status: "READY",
+        visibility: "PUBLIC",
+        ...(categoryRaw ? { category: categoryRaw as never } : {})
+      },
+      _count: { userId: true },
+      _sum: { viewCount: true },
+      orderBy: { _count: { userId: "desc" } },
+      take: 120
+    });
+
+    if (grouped.length === 0) {
+      return { items: [] };
+    }
+
+    const userIds = grouped.map((entry) => entry.userId);
+    const [users, recentVideos] = await Promise.all([
+      fastify.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          subscriberCount: true,
+          isVerified: true
+        }
+      }),
+      fastify.prisma.video.findMany({
+        where: {
+          userId: { in: userIds },
+          status: "READY",
+          visibility: "PUBLIC",
+          ...(categoryRaw ? { category: categoryRaw as never } : {})
+        },
+        select: {
+          id: true,
+          userId: true,
+          thumbnailUrl: true,
+          publishedAt: true,
+          createdAt: true
+        },
+        orderBy: { publishedAt: "desc" },
+        take: 800
+      })
+    ]);
+
+    const userById = new Map(users.map((user) => [user.id, user]));
+    const latestThumbByUser = new Map<string, string | null>();
+    for (const video of recentVideos) {
+      if (latestThumbByUser.has(video.userId)) continue;
+      latestThumbByUser.set(video.userId, video.thumbnailUrl || null);
+    }
+
+    const items = grouped
+      .map((entry) => {
+        const user = userById.get(entry.userId);
+        if (!user) return null;
+        return {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          subscriberCount: user.subscriberCount,
+          isVerified: user.isVerified,
+          videoCount: entry._count.userId,
+          totalViews: entry._sum.viewCount || 0,
+          previewThumbnailUrl: latestThumbByUser.get(entry.userId) || null
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => b.videoCount - a.videoCount || b.totalViews - a.totalViews || b.subscriberCount - a.subscriberCount)
+      .slice(0, limit);
+
+    return { items };
+  });
+
   fastify.get("/:username", async (request, reply) => {
     const username = (request.params as { username: string }).username;
     const user = await fastify.prisma.user.findUnique({ where: { username } });

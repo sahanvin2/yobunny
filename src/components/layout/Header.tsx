@@ -131,7 +131,7 @@ export default function Header() {
         title: video.title,
         subtitle: video.channel.displayName,
         thumb: video.thumbnailUrl,
-        href: `/watch/${video.id}`,
+        href: `/clips/${video.id}`,
         meta: formatDuration(video.duration)
       })),
       ...channelSuggestions.map((channel) => ({
@@ -152,7 +152,7 @@ export default function Header() {
         <Menu size={20} />
       </button>
 
-      <Link to="/discover" className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
+      <Link to="/" className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
         <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 rounded-md" width={32} height={32} fetchPriority="high" decoding="async" />
         <span className="text-foreground font-bold text-lg tracking-tight">YoBunny</span>
       </Link>

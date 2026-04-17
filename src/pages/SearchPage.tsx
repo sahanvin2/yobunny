@@ -132,7 +132,7 @@ export default function SearchPage() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {type === "videos" && visibleVideoResults.map((v) => (
-          <Link key={v.id} to={`/watch/${v.id}`} className="flex gap-4 group rounded-2xl p-2 hover:bg-surface transition-colors">
+          <Link key={v.id} to={`/clips/${v.id}`} className="flex gap-4 group rounded-2xl p-2 hover:bg-surface transition-colors">
             <div className="relative w-56 sm:w-64 aspect-video min-h-[126px] sm:min-h-[144px] rounded-2xl overflow-hidden bg-surface flex-shrink-0 border border-border/60 block">
               <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={360} sizes="(min-width: 640px) 256px, 224px" />
               <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-xs font-medium bg-background/80 text-foreground">

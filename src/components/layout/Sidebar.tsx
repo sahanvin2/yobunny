@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Home, TrendingUp, Clock, Bookmark, ThumbsUp, LayoutDashboard,
   ChevronLeft, ChevronRight, Radio, Scissors, ListVideo,
-  Smile, Film, Tv, Trophy, Gamepad2, MonitorPlay, FileText
+  Smile, Film, Tv, Trophy, Gamepad2, MonitorPlay
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
@@ -10,11 +10,10 @@ import ProtectedLink from "@/components/auth/ProtectedLink";
 const navSections = [
   {
     items: [
+      { icon: Scissors, label: "Shorts", path: "/clips" },
       { icon: Radio, label: "Streams", path: "/streams" },
-      { icon: Home, label: "Home", path: "/" },
+      { icon: Home, label: "Discover", path: "/home" },
       { icon: TrendingUp, label: "Trending", path: "/trending" },
-      { icon: FileText, label: "Posts", path: "/posts" },
-      { icon: Scissors, label: "Clips", path: "/clips" },
     ]
   },
   {
@@ -55,7 +54,7 @@ export default function Sidebar() {
       }`}
     >
       <div className="flex items-center justify-between h-[60px] px-4 gap-2">
-        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
+        <Link to="/clips" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
           <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 flex-shrink-0 rounded-md" width={32} height={32} loading="eager" decoding="async" />
           {!collapsed && (
             <span className="text-foreground font-bold text-lg tracking-tight group-hover:text-primary transition-colors">
@@ -77,7 +76,9 @@ export default function Sidebar() {
           <div key={sIdx} className={`mb-3 ${sIdx !== navSections.length - 1 ? 'pb-3 border-b border-sidebar-border' : ''}`}>
             <div className="space-y-0.5">
               {section.items.map(({ icon: Icon, label, path, protected: isProtected }) => {
-                const active = location.pathname === path;
+                const active = path === "/clips"
+                  ? location.pathname === "/clips" || location.pathname.startsWith("/clips/")
+                  : location.pathname === path;
                 const className = `flex items-center gap-4 px-4 py-3 rounded-2xl text-[14px] font-bold tracking-wide transition-all duration-300 ${
                   active
                     ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/[0.05] translate-x-1"

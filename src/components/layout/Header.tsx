@@ -152,7 +152,7 @@ export default function Header() {
         <Menu size={20} />
       </button>
 
-      <Link to="/" className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
+      <Link to="/clips" className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
         <img src="/logo.webp" alt="YoBunny" className="w-8 h-8 rounded-md" width={32} height={32} fetchPriority="high" decoding="async" />
         <span className="text-foreground font-bold text-lg tracking-tight">YoBunny</span>
       </Link>

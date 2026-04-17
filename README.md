@@ -31,7 +31,8 @@ npm run dev
 
 Once both servers are running:
 
-- **Main Site**: [http://localhost:8080](http://localhost:8080)
+- **Main Site (Shorts-first)**: [http://localhost:8080](http://localhost:8080)
+- **Shorts Feed**: [http://localhost:8080/clips](http://localhost:8080/clips)
 - **API**: [http://localhost:4000/api](http://localhost:4000/api)
 - **Upload Video**: [http://localhost:8080/upload](http://localhost:8080/upload)
 - **Dashboard**: [http://localhost:8080/dashboard](http://localhost:8080/dashboard)
@@ -62,6 +63,7 @@ Once both servers are running:
 
 ## Features
 
+- 📱 Mobile-first Shorts experience
 - 🎬 Upload videos with B2 storage
 - ▶️ Watch videos with streaming
 - 💬 Comments and interactions
@@ -139,4 +141,3 @@ Use `.env` files locally and rotate any exposed keys immediately.
 - Add Bull queue + BullBoard
 - Implement full FFmpeg transcoding worker
 - Add Socket.io real-time events
-- Migrate frontend from Vite to Next.js App Router for SEO

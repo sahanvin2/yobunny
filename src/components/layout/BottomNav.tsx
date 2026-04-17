@@ -3,8 +3,8 @@ import { Home, Search, Plus, Users, Scissors } from "lucide-react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
 
 const items = [
-  { icon: Home, label: "Home", path: "/" },
-  { icon: Scissors, label: "Clips", path: "/clips" },
+  { icon: Scissors, label: "Shorts", path: "/clips" },
+  { icon: Home, label: "Discover", path: "/home" },
   { icon: Plus, label: "Upload", path: "/upload", isUpload: true, protected: true },
   { icon: Users, label: "Subs", path: "/subscriptions" },
   { icon: Search, label: "Search", path: "/search" },
@@ -16,7 +16,9 @@ export default function BottomNav() {
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-[calc(var(--bottom-nav-h)+var(--safe-bottom))] bg-background/95 backdrop-blur-md border-t border-border z-40 flex items-start justify-around px-2 pt-2 pb-[max(8px,var(--safe-bottom))]">
       {items.map(({ icon: Icon, label, path, isUpload, protected: isProtected }) => {
-        const active = location.pathname === path;
+        const active = path === "/clips"
+          ? location.pathname === "/clips" || location.pathname.startsWith("/clips/")
+          : location.pathname === path;
         if (isUpload) {
           return (
             <ProtectedLink

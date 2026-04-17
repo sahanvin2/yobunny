@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import VideoGrid from "@/components/video/VideoGrid";
-import { API_BASE, fetchAllVideos, fetchPosts, partitionVideosByFormat, type ApiPost } from "@/lib/api";
+import { API_BASE, fetchAllVideos, partitionVideosByFormat } from "@/lib/api";
 import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SmartImage from "@/components/ui/SmartImage";
 
 const CLIPS_CAROUSEL = 80;
-const HOME_POST_LIMIT = 3;
 
 export default function HomePage() {
   const isMobile = useIsMobile();
   const [desktopColumns, setDesktopColumns] = useState(5);
   const [allVideos, setAllVideos] = useState<Awaited<ReturnType<typeof fetchAllVideos>>>([]);
   const [feedSplit, setFeedSplit] = useState<{ clips: Awaited<ReturnType<typeof fetchAllVideos>>; landscape: Awaited<ReturnType<typeof fetchAllVideos>> }>({ clips: [], landscape: [] });
-  const [posts, setPosts] = useState<ApiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -48,29 +46,6 @@ export default function HomePage() {
     };
 
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPosts = async () => {
-      try {
-        const data = await fetchPosts({ page: 1, limit: HOME_POST_LIMIT, sort: "latest" });
-        if (!cancelled) {
-          setPosts(data.items.slice(0, HOME_POST_LIMIT));
-        }
-      } catch {
-        if (!cancelled) {
-          setPosts([]);
-        }
-      }
-    };
-
-    void loadPosts();
 
     return () => {
       cancelled = true;
@@ -238,28 +213,6 @@ export default function HomePage() {
               No clips detected yet. Upload portrait videos or add the __portrait__ tag to surface clips here.
             </div>
           )}
-        </div>
-      )}
-
-      {!loading && !error && posts.length > 0 && (
-        <div className="space-y-6 pt-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-white">Latest Posts</h2>
-            <Link to="/posts" className="text-sm text-white/70 hover:text-white">View all</Link>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:col-span-3">
-              {posts.map((post) => (
-                <Link key={post.id} to={`/posts?open=${post.id}`} className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 p-4 min-h-[220px] flex flex-col">
-                  <h3 className="text-base font-semibold text-white line-clamp-2">{post.title}</h3>
-                  <p className="text-sm text-white/70 mt-3 line-clamp-5">{post.content}</p>
-                </Link>
-              ))}
-            </div>
-
-            <div className="hidden lg:block rounded-2xl border border-white/10 bg-white/[0.03] min-h-[220px]" aria-hidden="true" />
-          </div>
         </div>
       )}
 

@@ -22,8 +22,6 @@ const MyChannelsPage = lazy(() => import("./pages/MyChannelsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const PlaylistsPage = lazy(() => import("./pages/PlaylistsPage"));
-const PostsPage = lazy(() => import("./pages/PostsPage"));
-const PostUploadPage = lazy(() => import("./pages/PostUploadPage"));
 const SavedPage = lazy(() => import("./pages/SavedPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -57,7 +55,8 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route element={<MainLayout />}>
-                <Route path="/" element={<Index />} />
+                <Route path="/" element={<ClipsPage />} />
+                <Route path="/home" element={<Index />} />
                 <Route path="/watch/:id" element={<WatchPage />} />
                 <Route
                   path="/upload"
@@ -126,17 +125,8 @@ const App = () => (
                   }
                 />
                 <Route path="/trending" element={<TrendingPage />} />
-                <Route path="/posts" element={<PostsPage />} />
                 <Route path="/clips" element={<ClipsPage />} />
                 <Route path="/clips/:id" element={<ClipsPage />} />
-                <Route
-                  path="/posts/create"
-                  element={
-                    <ProtectedRoute>
-                      <PostUploadPage />
-                    </ProtectedRoute>
-                  }
-                />
                 <Route path="/streams" element={<StreamsPage />} />
                 <Route path="/live" element={<StreamsPage />} />
                 <Route
@@ -163,12 +153,12 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
-                <Route path="/kids" element={<Index />} />
-                <Route path="/movies" element={<Index />} />
-                <Route path="/shows" element={<Index />} />
-                <Route path="/sports" element={<Index />} />
-                <Route path="/series" element={<Index />} />
-                <Route path="/gaming" element={<Index />} />
+                <Route path="/kids" element={<ClipsPage />} />
+                <Route path="/movies" element={<ClipsPage />} />
+                <Route path="/shows" element={<ClipsPage />} />
+                <Route path="/sports" element={<ClipsPage />} />
+                <Route path="/series" element={<ClipsPage />} />
+                <Route path="/gaming" element={<ClipsPage />} />
                 <Route path="/subscriptions" element={<SubscriptionsPage />} />
                 <Route
                   path="/liked"

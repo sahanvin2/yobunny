@@ -52,12 +52,11 @@ async function verifyPostgres() {
   try {
     await prisma.$connect();
     await prisma.$queryRaw`SELECT 1`;
-    const [users, videos, posts] = await Promise.all([
+    const [users, videos] = await Promise.all([
       prisma.user.count(),
-      prisma.video.count(),
-      prisma.post.count()
+      prisma.video.count()
     ]);
-    return { users, videos, posts };
+    return { users, videos };
   } finally {
     await prisma.$disconnect();
   }

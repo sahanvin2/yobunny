@@ -10,7 +10,6 @@ import requestContextPlugin from "./plugins/requestContext.js";
 import authRoutes from "./routes/auth.js";
 import videosRoutes from "./routes/videos.js";
 import commentRoutes from "./routes/comments.js";
-import postsRoutes from "./routes/posts.js";
 import userRoutes from "./routes/users.js";
 import searchRoutes from "./routes/search.js";
 import streamsRoutes from "./routes/streams.js";
@@ -120,7 +119,6 @@ export async function buildServer() {
     await api.register(authRoutes, { prefix: "/auth" });
     await api.register(videosRoutes, { prefix: "/videos" });
     await api.register(commentRoutes);
-    await api.register(postsRoutes, { prefix: "/posts" });
     await api.register(userRoutes, { prefix: "/users" });
     await api.register(searchRoutes, { prefix: "/search" });
     await api.register(streamsRoutes, { prefix: "/streams" });

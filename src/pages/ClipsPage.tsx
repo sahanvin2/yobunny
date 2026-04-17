@@ -344,8 +344,8 @@ export default function ClipsPage() {
     return (
       <div className="p-4 lg:p-8 space-y-6 max-w-[1800px] mx-auto">
         <div>
-          <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-tight">Clips</h1>
-          <p className="text-sm text-white/60 mt-2">Short-form videos that matter.</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-tight">Shorts</h1>
+          <p className="text-sm text-white/60 mt-2">Vertical videos optimized for mobile viewing.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-3 lg:gap-4">
@@ -570,10 +570,10 @@ export default function ClipsPage() {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/home")}
               className="px-3 py-2 rounded-full bg-black/60 border border-white/20 text-xs font-semibold hover:bg-black/75"
             >
-              Home
+              Discover
             </button>
           </div>
         </div>

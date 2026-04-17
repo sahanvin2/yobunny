@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import ClipGrid from "@/components/video/ClipGrid";
-import { API_BASE, isClipLikeVideo, mapApiVideoToVideoData } from "@/lib/api";
+import { API_BASE, mapApiVideoToVideoData } from "@/lib/api";
 import { formatSubscriberCount, formatViewCount, type VideoData } from "@/lib/mockData";
 import { sortShortsVideos } from "@/lib/videoFeed";
 
@@ -51,7 +51,10 @@ export default function ChannelPage() {
     void load();
   }, [username]);
 
-  const shorts = useMemo(() => sortShortsVideos(videos.filter(isClipLikeVideo)), [videos]);
+  const shorts = useMemo(() => {
+    const playable = videos.filter((video) => Boolean(video.hlsBaseUrl));
+    return sortShortsVideos(playable.length > 0 ? playable : videos);
+  }, [videos]);
   const totalViews = useMemo(() => shorts.reduce((sum, video) => sum + video.viewCount, 0), [shorts]);
 
   if (!channel) {
@@ -131,6 +134,25 @@ export default function ChannelPage() {
             <ClipGrid clips={shorts} />
           )}
         </div>
+
+        <section className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <h3 className="text-lg font-semibold text-white">About</h3>
+          <p className="text-sm text-white/65 mt-2">{channel.displayName} shares short video content. Browse all videos above and tap any item to open it in the Shorts player.</p>
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+              <p className="text-lg font-bold text-white">{shorts.length}</p>
+              <p className="text-xs text-white/55">Videos</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+              <p className="text-lg font-bold text-white">{formatViewCount(totalViews)}</p>
+              <p className="text-xs text-white/55">Views</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-center">
+              <p className="text-lg font-bold text-white">{formatViewCount(channel.subscriberCount)}</p>
+              <p className="text-xs text-white/55">Subscribers</p>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

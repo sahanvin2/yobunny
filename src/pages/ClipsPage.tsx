@@ -64,12 +64,14 @@ export default function ClipsPage() {
         ? tagBasedPortraits
         : (await partitionVideosByFormat(items)).clips;
       const cleanPortraits = portraitItems.filter((item) => Boolean(item.hlsBaseUrl));
+      const fallbackPlayable = items.filter((item) => Boolean(item.hlsBaseUrl));
+      const sourceItems = cleanPortraits.length > 0 ? cleanPortraits : fallbackPlayable;
 
       setClips((prev) => {
         const base = replace ? [] : prev;
         const seen = new Set(base.map((item) => item.id));
         const merged = [...base];
-        for (const item of cleanPortraits) {
+        for (const item of sourceItems) {
           if (seen.has(item.id)) continue;
           merged.push(item);
           seen.add(item.id);
@@ -77,7 +79,7 @@ export default function ClipsPage() {
 
         setSourceById((prevSources) => {
           const nextSources = { ...prevSources };
-          for (const item of cleanPortraits) {
+          for (const item of sourceItems) {
             if (!nextSources[item.id] && item.hlsBaseUrl) {
               nextSources[item.id] = item.hlsBaseUrl;
             }

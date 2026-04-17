@@ -1,9 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import ClipGrid from "@/components/video/ClipGrid";
-import { fetchModelVideos, isClipLikeVideo, type ApiModelProfile } from "@/lib/api";
+import { fetchModelVideos, type ApiModelProfile } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
-import { sortFeedVideos } from "@/lib/videoFeed";
+import { sortFeedVideos, sortShortsVideos } from "@/lib/videoFeed";
 
 export default function ModelPage() {
   const { slug = "" } = useParams();
@@ -44,7 +44,10 @@ export default function ModelPage() {
     };
   }, [slug]);
 
-  const shorts = useMemo(() => items.filter((video) => isClipLikeVideo(video)), [items]);
+  const shorts = useMemo(() => {
+    const playable = items.filter((video) => Boolean(video.hlsBaseUrl));
+    return sortShortsVideos(playable.length > 0 ? playable : items);
+  }, [items]);
 
   if (loading) {
     return <div className="p-4 sm:p-6 text-sm text-white/65">Loading model profile...</div>;
@@ -65,7 +68,7 @@ export default function ModelPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1500px] mx-auto space-y-6">
-      <section className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.01] overflow-hidden">
+      <section className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_20%_10%,rgba(255,134,76,0.22),transparent_38%),radial-gradient(circle_at_80%_30%,rgba(79,172,254,0.18),transparent_40%),linear-gradient(145deg,rgba(12,12,16,0.95),rgba(5,6,12,0.98))] overflow-hidden">
         <div className="grid md:grid-cols-[280px_1fr] gap-0">
           <div className="bg-black/40 min-h-[220px]">
             {model.thumbnailUrl ? (
@@ -83,33 +86,35 @@ export default function ModelPage() {
             )}
           </div>
           <div className="p-6 lg:p-8">
-            <p className="text-xs uppercase tracking-widest text-white/55">Model Profile</p>
+            <p className="text-xs uppercase tracking-widest text-white/65">Model Profile</p>
             <h1 className="text-3xl font-bold text-white mt-2">{model.name}</h1>
-            <p className="text-sm text-white/60 mt-2">Videos tagged with this model profile.</p>
+            <p className="text-sm text-white/75 mt-2">Videos tagged with this model profile.</p>
 
             <div className="grid grid-cols-3 gap-3 mt-6 max-w-xl">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center">
+              <div className="rounded-2xl border border-white/15 bg-black/35 p-3 text-center">
                 <p className="text-xl font-bold text-white">{model.videoCount}</p>
                 <p className="text-xs text-white/60">Videos</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center">
+              <div className="rounded-2xl border border-white/15 bg-black/35 p-3 text-center">
                 <p className="text-xl font-bold text-white">{model.creatorCount}</p>
                 <p className="text-xs text-white/60">Creators</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center">
+              <div className="rounded-2xl border border-white/15 bg-black/35 p-3 text-center">
                 <p className="text-xl font-bold text-white">{formatViewCount(model.totalViews)}</p>
                 <p className="text-xs text-white/60">Views</p>
               </div>
             </div>
 
-            <div className="mt-6 flex gap-2">
-              <Link to="/discover" className="px-4 py-2 rounded-full border border-white/20 text-sm text-white hover:bg-white/10 transition-colors">
-                Discover
-              </Link>
-              <Link to="/search" className="px-4 py-2 rounded-full border border-white/20 text-sm text-white hover:bg-white/10 transition-colors">
-                Search
-              </Link>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-white/85">
+              <span className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30">Age: {model.age ?? "N/A"}</span>
+              <span className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30">Measurements: {model.bodyMeasurements || "N/A"}</span>
+              <span className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30">Height: {model.height || "N/A"}</span>
+              {model.primaryAccountUsername ? (
+                <span className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30">@{model.primaryAccountUsername}</span>
+              ) : null}
             </div>
+
+            {model.profileBio ? <p className="text-sm text-white/70 mt-4 line-clamp-2">{model.profileBio}</p> : null}
           </div>
         </div>
       </section>

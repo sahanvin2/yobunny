@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bookmark, Facebook, Heart, Link as LinkIcon, MessageCircle, MoreVertical, Share2, Twitter, X } from "lucide-react";
-import { API_BASE, addComment, fetchVideoComments, fetchVideos, isClipLikeVideo, partitionVideosByFormat, toggleLike, toggleSave } from "@/lib/api";
+import { API_BASE, addComment, fetchVideoComments, fetchVideos, isClipLikeVideo, partitionVideosByFormat, reportVideoView, toggleLike, toggleSave } from "@/lib/api";
 import { formatRelativeTime, formatViewCount, type CommentData, type VideoData } from "@/lib/mockData";
 import { sortShortsVideos } from "@/lib/videoFeed";
 import { isAuthenticated } from "@/lib/auth";
@@ -64,6 +64,7 @@ export default function ClipsPage() {
   const playerSentinelRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const viewReportedByIdRef = useRef<Record<string, boolean>>({});
   const didJumpToInitialRef = useRef(false);
   const [activeVideoId, setActiveVideoId] = useState<string>(id || "");
   const [likedById, setLikedById] = useState<Record<string, boolean>>({});
@@ -355,6 +356,13 @@ export default function ClipsPage() {
     setSourceById((prev) => ({ ...prev, [videoId]: `${API_BASE}/videos/${videoId}/playable` }));
   }, [fallbackTriedById]);
 
+  const markViewReported = useCallback((videoId: string) => {
+    if (viewReportedByIdRef.current[videoId]) return;
+    viewReportedByIdRef.current[videoId] = true;
+    void reportVideoView(videoId);
+    setClips((prev) => prev.map((item) => (item.id === videoId ? { ...item, viewCount: item.viewCount + 1 } : item)));
+  }, []);
+
   const onTogglePlay = useCallback((videoId: string) => {
     const videoEl = videoRefs.current[videoId];
     if (!videoEl) return;
@@ -408,6 +416,16 @@ export default function ClipsPage() {
                   preload={isActive ? "auto" : "metadata"}
                   onClick={() => onTogglePlay(video.id)}
                   onError={() => onVideoError(video.id)}
+                  onTimeUpdate={(event) => {
+                    if (!isActive) return;
+                    const duration = event.currentTarget.duration;
+                    if (!Number.isFinite(duration) || duration <= 0) return;
+                    const progress = event.currentTarget.currentTime / duration;
+                    if (progress >= 0.2) {
+                      markViewReported(video.id);
+                    }
+                  }}
+                  onEnded={() => markViewReported(video.id)}
                   className="w-full h-full object-cover"
                 />
 

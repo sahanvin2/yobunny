@@ -56,8 +56,14 @@ export type ApiModelSummary = {
   slug: string;
   name: string;
   videoCount: number;
+  creatorCount?: number;
   totalViews: number;
   thumbnailUrl: string | null;
+  primaryAccountUsername?: string | null;
+  age?: number | null;
+  bodyMeasurements?: string | null;
+  height?: string | null;
+  profileBio?: string | null;
 };
 
 export type ApiModelProfile = {
@@ -67,6 +73,11 @@ export type ApiModelProfile = {
   creatorCount: number;
   totalViews: number;
   thumbnailUrl: string | null;
+  primaryAccountUsername?: string | null;
+  age?: number | null;
+  bodyMeasurements?: string | null;
+  height?: string | null;
+  profileBio?: string | null;
 };
 
 export type ApiCreatorSummary = {
@@ -349,6 +360,17 @@ export async function reportVideoWatch(videoId: string, watchPercent: number) {
 
   if (!res.ok) {
     throw new Error("Failed to report watch progress");
+  }
+}
+
+export async function reportVideoView(videoId: string) {
+  try {
+    await fetch(`${API_BASE}/videos/${videoId}/view`, {
+      method: "POST",
+      keepalive: true
+    });
+  } catch {
+    // Best-effort endpoint; swallow network errors so playback stays smooth.
   }
 }
 

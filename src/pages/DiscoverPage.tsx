@@ -121,7 +121,12 @@ export default function DiscoverPage() {
 
   return (
     <div className="p-4 sm:p-5 lg:p-8 max-w-[1600px] mx-auto space-y-6">
-      <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.02] to-transparent p-4 sm:p-6">
+      <section className="rounded-[1.75rem] border border-white/10 bg-[radial-gradient(circle_at_8%_10%,rgba(255,142,62,0.25),transparent_35%),radial-gradient(circle_at_88%_20%,rgba(56,189,248,0.2),transparent_42%),linear-gradient(140deg,rgba(9,9,13,0.95),rgba(11,15,26,0.95))] p-4 sm:p-6">
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-white/60">Discover</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mt-1">Find models and clips faster</h1>
+          <p className="text-sm text-white/70 mt-2">Browse by model profiles, newest drops, and trending niches in one place.</p>
+        </div>
         <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
           <div className="flex gap-2 sm:gap-3 overflow-x-auto custom-scrollbar">
             {TAB_LABELS.map((tab) => {
@@ -206,6 +211,11 @@ export default function DiscoverPage() {
               <div className="absolute inset-x-0 bottom-0 p-2 sm:p-3 bg-gradient-to-t from-black/80 to-transparent">
                 <p className="text-white text-base sm:text-xl font-semibold leading-tight line-clamp-1">{model.name}</p>
                 <p className="text-[11px] sm:text-xs text-white/75 mt-1 line-clamp-1">{model.videoCount} videos · {formatViewCount(model.totalViews)} views</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {model.age ? <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-white/25 bg-black/40 text-white/90">{model.age}y</span> : null}
+                  {model.bodyMeasurements ? <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-white/25 bg-black/40 text-white/90">{model.bodyMeasurements}</span> : null}
+                  {model.primaryAccountUsername ? <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-white/25 bg-black/40 text-white/90">@{model.primaryAccountUsername}</span> : null}
+                </div>
               </div>
             </Link>
           ))}

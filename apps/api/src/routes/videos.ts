@@ -5,6 +5,7 @@ import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -45,6 +46,9 @@ const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
 const MODEL_TAG_PREFIX = "__MODEL__:";
 const MODEL_BROWSE_SCAN_LIMIT = 1600;
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MODEL_METADATA_AGE_PREFIX = "__AGE__:";
+const MODEL_METADATA_MEASUREMENTS_PREFIX = "__MEASUREMENTS__:";
+const MODEL_METADATA_HEIGHT_PREFIX = "__HEIGHT__:";
 
 function normalizeModelSlug(input: string) {
   const normalized = input
@@ -72,6 +76,76 @@ function titleCaseFromSlug(slug: string) {
 
 function toModelTag(slug: string) {
   return `${MODEL_TAG_PREFIX}${slug}`;
+}
+
+function parseAgeValue(raw: string) {
+  const match = String(raw || "").match(/\b(1[89]|[2-6][0-9])\b/);
+  return match ? Number(match[1]) : null;
+}
+
+function parseMeasurementsValue(raw: string) {
+  const normalized = String(raw || "").trim();
+  const match = normalized.match(/\b(\d{2,3})\s*[-x/]\s*(\d{2,3})\s*[-x/]\s*(\d{2,3})\b/i);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function parseHeightValue(raw: string) {
+  const normalized = String(raw || "").trim();
+  const feetInches = normalized.match(/\b([4-7])\s*['’]\s*(\d{1,2})\b/);
+  if (feetInches) return `${feetInches[1]}'${feetInches[2]}"`;
+
+  const centimeters = normalized.match(/\b(1\d{2}|2[0-2]\d)\s*cm\b/i);
+  if (centimeters) return `${centimeters[1]} cm`;
+
+  return null;
+}
+
+function extractModelMetadata(tags: string[], bio?: string | null) {
+  let age: number | null = null;
+  let bodyMeasurements: string | null = null;
+  let height: string | null = null;
+
+  for (const rawTag of tags || []) {
+    const tag = String(rawTag || "").trim();
+    if (!tag) continue;
+
+    if (!age && tag.startsWith(MODEL_METADATA_AGE_PREFIX)) {
+      age = parseAgeValue(tag.slice(MODEL_METADATA_AGE_PREFIX.length));
+      continue;
+    }
+
+    if (!bodyMeasurements && tag.startsWith(MODEL_METADATA_MEASUREMENTS_PREFIX)) {
+      bodyMeasurements = parseMeasurementsValue(tag.slice(MODEL_METADATA_MEASUREMENTS_PREFIX.length));
+      continue;
+    }
+
+    if (!height && tag.startsWith(MODEL_METADATA_HEIGHT_PREFIX)) {
+      height = parseHeightValue(tag.slice(MODEL_METADATA_HEIGHT_PREFIX.length));
+    }
+  }
+
+  const bioText = String(bio || "");
+  if (!age) {
+    const ageMatch = bioText.match(/(?:age|years?\s*old)\D{0,8}(1[89]|[2-6][0-9])\b/i);
+    age = ageMatch ? Number(ageMatch[1]) : null;
+  }
+
+  if (!bodyMeasurements) {
+    bodyMeasurements = parseMeasurementsValue(bioText);
+  }
+
+  if (!height) {
+    const heightMatch = bioText.match(/(?:height|ht)\D{0,8}([4-7]\s*['’]\s*\d{1,2}|1\d{2}\s*cm|2[0-2]\d\s*cm)/i);
+    height = heightMatch ? parseHeightValue(heightMatch[1]) : null;
+  }
+
+  return {
+    age,
+    bodyMeasurements,
+    height,
+    profileBio: bioText.trim() || null
+  };
 }
 
 function extractModelSlugs(tags: string[]) {
@@ -333,15 +407,36 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         viewCount: true,
         thumbnailUrl: true,
         publishedAt: true,
-        createdAt: true
+        createdAt: true,
+        userId: true,
+        user: {
+          select: {
+            username: true,
+            bio: true
+          }
+        }
       },
       orderBy: { publishedAt: "desc" },
       take: MODEL_BROWSE_SCAN_LIMIT
     });
 
-    const index = new Map<string, { slug: string; name: string; videoCount: number; totalViews: number; thumbnailUrl: string | null; latestAt: number }>();
+    const index = new Map<string, {
+      slug: string;
+      name: string;
+      videoCount: number;
+      totalViews: number;
+      thumbnailUrl: string | null;
+      latestAt: number;
+      creatorIds: Set<string>;
+      primaryAccountUsername: string | null;
+      age: number | null;
+      bodyMeasurements: string | null;
+      height: string | null;
+      profileBio: string | null;
+    }>();
     for (const item of items) {
       const slugs = extractModelSlugs(item.tags);
+      const metadata = extractModelMetadata(item.tags, item.user?.bio || null);
       for (const slug of slugs) {
         const existing = index.get(slug);
         const publishedAt = new Date(item.publishedAt || item.createdAt).getTime();
@@ -352,15 +447,37 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
             videoCount: 1,
             totalViews: item.viewCount,
             thumbnailUrl: item.thumbnailUrl || null,
-            latestAt: publishedAt
+            latestAt: publishedAt,
+            creatorIds: new Set([item.userId]),
+            primaryAccountUsername: item.user?.username || null,
+            age: metadata.age,
+            bodyMeasurements: metadata.bodyMeasurements,
+            height: metadata.height,
+            profileBio: metadata.profileBio
           });
           continue;
         }
 
         existing.videoCount += 1;
         existing.totalViews += item.viewCount;
+        existing.creatorIds.add(item.userId);
         if (!existing.thumbnailUrl && item.thumbnailUrl) {
           existing.thumbnailUrl = item.thumbnailUrl;
+        }
+        if (!existing.primaryAccountUsername && item.user?.username) {
+          existing.primaryAccountUsername = item.user.username;
+        }
+        if (existing.age == null && metadata.age != null) {
+          existing.age = metadata.age;
+        }
+        if (!existing.bodyMeasurements && metadata.bodyMeasurements) {
+          existing.bodyMeasurements = metadata.bodyMeasurements;
+        }
+        if (!existing.height && metadata.height) {
+          existing.height = metadata.height;
+        }
+        if (!existing.profileBio && metadata.profileBio) {
+          existing.profileBio = metadata.profileBio;
         }
         existing.latestAt = Math.max(existing.latestAt, publishedAt);
       }
@@ -373,7 +490,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .sort((a, b) => b.videoCount - a.videoCount || b.totalViews - a.totalViews || b.latestAt - a.latestAt)
       .slice(0, limit)
-      .map(({ latestAt, ...entry }) => entry);
+      .map(({ latestAt, creatorIds, ...entry }) => ({
+        ...entry,
+        creatorCount: creatorIds.size
+      }));
 
     reply.header("Cache-Control", "public, max-age=120");
     return { items: result };
@@ -390,7 +510,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         status: "READY",
         visibility: "PUBLIC"
       },
-      include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } },
+      include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true, bio: true } } },
       orderBy: { publishedAt: "desc" },
       take: MODEL_BROWSE_SCAN_LIMIT
     });
@@ -402,6 +522,18 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
     const creatorIds = new Set(modelVideos.map((video) => video.userId));
     const totalViews = modelVideos.reduce((sum, video) => sum + video.viewCount, 0);
+    const metadata = modelVideos
+      .map((video) => extractModelMetadata(video.tags, video.user?.bio || null))
+      .find((entry) => entry.age != null || entry.bodyMeasurements || entry.height || entry.profileBio) || {
+      age: null,
+      bodyMeasurements: null,
+      height: null,
+      profileBio: null
+    };
+
+    const primaryCreator = modelVideos
+      .map((video) => video.user)
+      .find((user): user is NonNullable<typeof user> => Boolean(user));
 
     return {
       model: {
@@ -410,10 +542,41 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         videoCount: modelVideos.length,
         creatorCount: creatorIds.size,
         totalViews,
-        thumbnailUrl: modelVideos.find((video) => video.thumbnailUrl)?.thumbnailUrl || null
+        thumbnailUrl: modelVideos.find((video) => video.thumbnailUrl)?.thumbnailUrl || null,
+        primaryAccountUsername: primaryCreator?.username || null,
+        age: metadata.age,
+        bodyMeasurements: metadata.bodyMeasurements,
+        height: metadata.height,
+        profileBio: metadata.profileBio
       },
       items: modelVideos
     };
+  });
+
+  fastify.post("/:id/view", async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const video = await fastify.prisma.video.findUnique({
+      where: { id },
+      select: { id: true, visibility: true, userId: true }
+    });
+
+    if (!video || video.visibility !== "PUBLIC") {
+      return reply.code(404).send({ error: "Video not found", code: "NOT_FOUND" });
+    }
+
+    const ipAddress = request.ip || "unknown";
+    const userAgent = String(request.headers["user-agent"] || "na");
+    const dedupeHash = createHash("sha1").update(`${id}:${ipAddress}:${userAgent}`).digest("hex");
+    const dedupeKey = `viewdedupe:${id}:${dedupeHash}`;
+    const dedupe = await fastify.redis.set(dedupeKey, "1", "EX", 30 * 60, "NX");
+
+    if (!dedupe) {
+      return { counted: false };
+    }
+
+    await fastify.prisma.video.update({ where: { id }, data: { viewCount: { increment: 1 } } });
+    await fastify.prisma.user.update({ where: { id: video.userId }, data: { totalViews: { increment: 1 } } }).catch(() => undefined);
+    return { counted: true };
   });
 
   fastify.get("/:id", async (request, reply) => {
@@ -693,7 +856,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Upload to B2
       fastify.log.info({ fileSize: buffer.length }, "Saving to B2 storage");
-      const videoKey = `videos/${video.id}/original.${ext}`;
+      const videoKey = `mp4/${video.id}/original.${ext}`;
       const b2VideoUploaded = await uploadObjectToB2(videoKey, buffer, videoUpload.mimetype || `video/${ext}`, 300000); // 5 mins timeout
       storedRawFileKey = b2VideoUploaded.key;
       playbackUrl = b2VideoUploaded.publicUrl;

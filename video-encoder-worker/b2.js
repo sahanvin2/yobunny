@@ -61,8 +61,20 @@ export async function uploadFile(client, env, localPath, remoteKey) {
       await sendUpload();
       return `${env.B2_PUBLIC_BASE.replace(/\/$/, "")}/${remoteKey}`;
     } catch (error) {
+      const code = String(error?.code || "");
+      const name = String(error?.name || "");
       const message = String(error?.message || error);
-      const retryable = message.includes("socket hang up") || message.includes("ECONNRESET") || message.includes("TimeoutError");
+      const retryable =
+        code === "ECONNRESET" ||
+        code === "ENOTFOUND" ||
+        code === "EAI_AGAIN" ||
+        code === "ETIMEDOUT" ||
+        name.includes("Timeout") ||
+        message.includes("socket hang up") ||
+        message.includes("ECONNRESET") ||
+        message.includes("ENOTFOUND") ||
+        message.includes("EAI_AGAIN") ||
+        message.includes("timed out");
       if (!retryable || attempt === 2) {
         throw error;
       }
@@ -106,7 +118,16 @@ export async function uploadDirectory(client, env, localRoot, remoteRoot) {
   } while (continuationToken);
 
   const pendingEntries = fileEntries.filter((item) => !existingKeys.has(item.key));
-  const concurrency = 16;
+  const alreadyUploadedEntries = fileEntries
+    .filter((item) => existingKeys.has(item.key))
+    .map((item) => ({
+      ...item,
+      publicUrl: `${env.B2_PUBLIC_BASE.replace(/\/$/, "")}/${item.key}`
+    }));
+
+  uploaded.push(...alreadyUploadedEntries);
+
+  const concurrency = 8;
   let cursor = 0;
 
   await Promise.all(

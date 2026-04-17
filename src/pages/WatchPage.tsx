@@ -50,6 +50,7 @@ import {
   fetchDownloadUrl,
   fetchVideoInteractions,
   partitionVideosByFormat,
+  reportVideoView,
   reportVideoWatch,
   toggleLike,
   toggleSave,
@@ -137,6 +138,7 @@ export default function WatchPage() {
   const wasPlayingRef = useRef(false);
   const lastWatchReportRef = useRef(0);
   const lastWatchReportSentAtRef = useRef(0);
+  const viewReportedRef = useRef(false);
 
   const likeCount = useMemo(() => Math.max(0, Math.floor(video.viewCount * 0.04) + (liked ? 1 : 0)), [video.viewCount, liked]);
   const currentPlaybackUrl = playbackCandidates[playbackIndex] || "";
@@ -170,6 +172,7 @@ export default function WatchPage() {
         setSignedFallbackTried(false);
         lastWatchReportRef.current = 0;
         lastWatchReportSentAtRef.current = 0;
+        viewReportedRef.current = false;
         setDescription(videoDetails.description || "");
         setLiked(interactions.liked);
         setSaved(interactions.saved);
@@ -218,10 +221,16 @@ export default function WatchPage() {
 
   const reportWatchProgress = (progress: number) => {
     if (!id) return;
-    if (!isAuthenticated()) return;
 
     const normalized = Math.max(0, Math.min(1, progress));
     if (normalized < 0.05) return;
+
+    if (!viewReportedRef.current && normalized >= 0.15) {
+      viewReportedRef.current = true;
+      void reportVideoView(id);
+    }
+
+    if (!isAuthenticated()) return;
     if (normalized <= lastWatchReportRef.current + 0.05 && normalized < 1) return;
 
     const now = Date.now();

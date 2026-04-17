@@ -14,7 +14,9 @@
     "setup:all": "npm run prisma:push && npm run setup:storage-db",
     "reconcile:orientation": "node scripts/reconcile-video-orientation.mjs",
     "reconcile:orientation:apply": "node scripts/reconcile-video-orientation.mjs --apply",
-    "purge:videos": "node scripts/purge-videos-media.mjs"
+    "purge:videos": "node scripts/purge-videos-media.mjs",
+    "import:hls": "node scripts/import-hls-folder.mjs",
+    "import:hls:dry": "set DRY_RUN=1&& node scripts/import-hls-folder.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.872.0",

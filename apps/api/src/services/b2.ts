@@ -2,7 +2,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config.js";
 
-const DEFAULT_MEDIA_PREFIXES = ["video", "videos", "thumbnails"];
+const DEFAULT_MEDIA_PREFIXES = ["video", "videos", "thumbnails", "hls", "mp4"];
 
 function normalizePrefix(prefix: string) {
   return prefix.trim().replace(/^\/+|\/+$/g, "");

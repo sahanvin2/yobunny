@@ -1,16 +1,15 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { fetchAllVideos, fetchCreatorSummaries, type ApiCreatorSummary } from "@/lib/api";
+import { fetchAllVideos, fetchModelSummaries, type ApiModelSummary } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
 
-type DiscoverTab = "gifs" | "images" | "creators" | "niches";
+type DiscoverTab = "videos" | "models" | "niches";
 type SortMode = "trending" | "top_week" | "top_month" | "latest";
 
 const TAB_LABELS: Array<{ key: DiscoverTab; label: string }> = [
-  { key: "gifs", label: "GIFs" },
-  { key: "images", label: "Images" },
-  { key: "creators", label: "Creators" },
+  { key: "videos", label: "Videos" },
+  { key: "models", label: "Models" },
   { key: "niches", label: "Niches" }
 ];
 
@@ -34,11 +33,11 @@ const NICHE_TAGS = [
   "Culture"
 ];
 
-function creatorScore(item: ApiCreatorSummary, mode: SortMode) {
-  if (mode === "latest") return item.videoCount * 5 + item.subscriberCount;
-  if (mode === "top_week") return item.videoCount * 8 + item.subscriberCount * 1.2;
-  if (mode === "top_month") return item.totalViews * 0.8 + item.videoCount * 4;
-  return item.totalViews + item.subscriberCount * 4 + item.videoCount * 15;
+function modelScore(item: ApiModelSummary, mode: SortMode) {
+  if (mode === "latest") return item.videoCount * 10;
+  if (mode === "top_week") return item.videoCount * 8 + item.totalViews * 0.15;
+  if (mode === "top_month") return item.totalViews * 0.9 + item.videoCount * 8;
+  return item.totalViews + item.videoCount * 30;
 }
 
 function videoScore(item: VideoData, mode: SortMode) {
@@ -50,12 +49,12 @@ function videoScore(item: VideoData, mode: SortMode) {
 }
 
 export default function DiscoverPage() {
-  const [activeTab, setActiveTab] = useState<DiscoverTab>("creators");
+  const [activeTab, setActiveTab] = useState<DiscoverTab>("models");
   const [sortMode, setSortMode] = useState<SortMode>("trending");
   const [sortOpen, setSortOpen] = useState(false);
-  const [creators, setCreators] = useState<ApiCreatorSummary[]>([]);
+  const [models, setModels] = useState<ApiModelSummary[]>([]);
   const [mediaItems, setMediaItems] = useState<VideoData[]>([]);
-  const [loadingCreators, setLoadingCreators] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [loadingMedia, setLoadingMedia] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,26 +64,26 @@ export default function DiscoverPage() {
     const loadDiscover = async () => {
       try {
         setLoadingMedia(true);
-        setLoadingCreators(true);
+        setLoadingModels(true);
         setError("");
-        const [creatorItems, videos] = await Promise.all([
-          fetchCreatorSummaries({ limit: 60 }),
+        const [modelItems, videos] = await Promise.all([
+          fetchModelSummaries({ limit: 120 }),
           fetchAllVideos({ sort: "views", limitPerPage: 60, maxPages: 2 })
         ]);
         if (!cancelled) {
           const playable = videos.filter((item) => Boolean(item.hlsBaseUrl));
-          setCreators(creatorItems);
+          setModels(modelItems);
           setMediaItems(playable.length > 0 ? playable : videos);
         }
       } catch (err) {
         if (!cancelled) {
-          setCreators([]);
+          setModels([]);
           setMediaItems([]);
-          setError(err instanceof Error ? err.message : "Failed to load creators");
+          setError(err instanceof Error ? err.message : "Failed to load discover data");
         }
       } finally {
         if (!cancelled) {
-          setLoadingCreators(false);
+          setLoadingModels(false);
           setLoadingMedia(false);
         }
       }
@@ -97,9 +96,9 @@ export default function DiscoverPage() {
     };
   }, []);
 
-  const sortedCreators = useMemo(
-    () => [...creators].sort((a, b) => creatorScore(b, sortMode) - creatorScore(a, sortMode)),
-    [creators, sortMode]
+  const sortedModels = useMemo(
+    () => [...models].sort((a, b) => modelScore(b, sortMode) - modelScore(a, sortMode)),
+    [models, sortMode]
   );
 
   const sortedMedia = useMemo(
@@ -107,14 +106,17 @@ export default function DiscoverPage() {
     [mediaItems, sortMode]
   );
 
-  const gifVideos = useMemo(
-    () => sortedMedia.filter((video) => (video.tags || []).some((tag) => tag.toLowerCase().includes("gif"))).slice(0, 40),
+  const nicheCards = useMemo(
+    () => NICHE_TAGS.map((niche) => {
+      const key = niche.toUpperCase();
+      const video = sortedMedia.find((item) => item.category === key);
+      return {
+        niche,
+        thumbnail: video?.thumbnailUrl || null,
+        href: `/search?q=${encodeURIComponent(niche)}`
+      };
+    }),
     [sortedMedia]
-  );
-
-  const imageLikeVideos = useMemo(
-    () => sortedMedia.filter((video) => !gifVideos.some((gif) => gif.id === video.id)).slice(0, 40),
-    [gifVideos, sortedMedia]
   );
 
   return (
@@ -177,21 +179,21 @@ export default function DiscoverPage() {
         </div>
       </section>
 
-      {(loadingCreators || loadingMedia) && <p className="text-sm text-white/60">Loading discover...</p>}
+      {(loadingModels || loadingMedia) && <p className="text-sm text-white/60">Loading discover...</p>}
       {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {!loadingCreators && !loadingMedia && !error && activeTab === "creators" && (
+      {!loadingModels && !loadingMedia && !error && activeTab === "models" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {sortedCreators.map((creator) => (
+          {sortedModels.map((model) => (
             <Link
-              key={creator.id}
-              to={`/channel/${creator.username}`}
+              key={model.slug}
+              to={`/models/${model.slug}`}
               className="group relative overflow-hidden rounded-md sm:rounded-2xl border border-white/10 bg-black/30"
             >
-              {creator.previewThumbnailUrl ? (
+              {model.thumbnailUrl ? (
                 <img
-                  src={creator.previewThumbnailUrl}
-                  alt={creator.displayName}
+                  src={model.thumbnailUrl}
+                  alt={model.name}
                   className="w-full aspect-[3/4] object-cover group-hover:scale-[1.04] transition-transform duration-300"
                   loading="lazy"
                   decoding="async"
@@ -202,43 +204,17 @@ export default function DiscoverPage() {
                 <div className="w-full aspect-[3/4] bg-black/40" />
               )}
               <div className="absolute inset-x-0 bottom-0 p-2 sm:p-3 bg-gradient-to-t from-black/80 to-transparent">
-                <p className="text-white text-base sm:text-xl font-semibold leading-tight line-clamp-1">{creator.displayName}</p>
-                <p className="text-[11px] sm:text-xs text-white/75 mt-1 line-clamp-1">{formatViewCount(creator.totalViews)} views</p>
+                <p className="text-white text-base sm:text-xl font-semibold leading-tight line-clamp-1">{model.name}</p>
+                <p className="text-[11px] sm:text-xs text-white/75 mt-1 line-clamp-1">{model.videoCount} videos · {formatViewCount(model.totalViews)} views</p>
               </div>
             </Link>
           ))}
         </section>
       )}
 
-      {!loadingCreators && !loadingMedia && !error && activeTab === "gifs" && (
+      {!loadingModels && !loadingMedia && !error && activeTab === "videos" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {(gifVideos.length > 0 ? gifVideos : sortedMedia.slice(0, 40)).map((item) => (
-            <Link
-              key={item.id}
-              to={`/clips/${item.id}`}
-              className="group relative overflow-hidden rounded-md sm:rounded-2xl border border-white/10 bg-black/30"
-            >
-              <img
-                src={item.thumbnailUrl}
-                alt={item.title}
-                className="w-full aspect-[3/4] object-cover group-hover:scale-[1.04] transition-transform duration-300"
-                loading="lazy"
-                decoding="async"
-                width={320}
-                height={420}
-              />
-              <div className="absolute inset-x-0 bottom-0 p-2 sm:p-3 bg-gradient-to-t from-black/85 to-transparent">
-                <p className="text-white text-sm font-semibold line-clamp-1">{item.channel.displayName}</p>
-                <p className="text-[11px] text-white/70 mt-1">Video</p>
-              </div>
-            </Link>
-          ))}
-        </section>
-      )}
-
-      {!loadingCreators && !loadingMedia && !error && activeTab === "images" && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {imageLikeVideos.map((item) => (
+          {sortedMedia.slice(0, 60).map((item) => (
             <Link
               key={item.id}
               to={`/clips/${item.id}`}
@@ -262,17 +238,32 @@ export default function DiscoverPage() {
         </section>
       )}
 
-      {!loadingCreators && !loadingMedia && !error && activeTab === "niches" && (
+      {!loadingModels && !loadingMedia && !error && activeTab === "niches" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {NICHE_TAGS.map((niche, index) => (
+          {nicheCards.map((card, index) => (
             <Link
-              key={niche}
-              to={`/search?q=${encodeURIComponent(niche)}`}
-              className="rounded-2xl border border-white/10 p-4 bg-gradient-to-br from-white/[0.08] via-white/[0.03] to-black/10 hover:from-white/[0.14] hover:via-white/[0.07] transition-colors"
+              key={card.niche}
+              to={card.href}
+              className="group relative rounded-2xl border border-white/10 overflow-hidden bg-black/30"
               style={{ animationDelay: `${index * 35}ms` }}
             >
-              <p className="text-white font-semibold text-sm sm:text-base">{niche}</p>
-              <p className="text-xs text-white/60 mt-1">Explore creators and shorts</p>
+              {card.thumbnail ? (
+                <img
+                  src={card.thumbnail}
+                  alt={card.niche}
+                  className="w-full aspect-[4/5] object-cover group-hover:scale-[1.04] transition-transform duration-300"
+                  loading="lazy"
+                  decoding="async"
+                  width={360}
+                  height={440}
+                />
+              ) : (
+                <div className="w-full aspect-[4/5] bg-gradient-to-br from-white/[0.08] via-white/[0.03] to-black/10" />
+              )}
+              <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/85 to-transparent">
+                <p className="text-white font-semibold text-sm sm:text-base">{card.niche}</p>
+                <p className="text-xs text-white/70 mt-1">Explore shorts</p>
+              </div>
             </Link>
           ))}
         </section>

@@ -1,10 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Search, Plus, Users, Scissors } from "lucide-react";
+import { Home, Search, Plus, Users, Clapperboard } from "lucide-react";
 import ProtectedLink from "@/components/auth/ProtectedLink";
 
 const items = [
-  { icon: Scissors, label: "Home", path: "/" },
-  { icon: Home, label: "Discover", path: "/discover" },
+  { icon: Home, label: "Home", path: "/" },
+  { icon: Clapperboard, label: "Discover", path: "/discover" },
   { icon: Plus, label: "Upload", path: "/upload", isUpload: true, protected: true },
   { icon: Users, label: "Subs", path: "/subscriptions" },
   { icon: Search, label: "Search", path: "/search" },

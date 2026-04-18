@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { fetchAllVideos, fetchModelSummaries, type ApiModelSummary } from "@/lib/api";
+import { fetchModelSummaries, fetchVideos, type ApiModelSummary } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
 
 type DiscoverTab = "videos" | "models" | "niches";
@@ -54,9 +54,21 @@ export default function DiscoverPage() {
   const [sortOpen, setSortOpen] = useState(false);
   const [models, setModels] = useState<ApiModelSummary[]>([]);
   const [mediaItems, setMediaItems] = useState<VideoData[]>([]);
+  const [modelsOffset, setModelsOffset] = useState(0);
+  const [modelsHasMore, setModelsHasMore] = useState(true);
+  const [videosPage, setVideosPage] = useState(1);
+  const [videosHasMore, setVideosHasMore] = useState(true);
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingMedia, setLoadingMedia] = useState(false);
+  const [loadingMoreModels, setLoadingMoreModels] = useState(false);
+  const [loadingMoreVideos, setLoadingMoreVideos] = useState(false);
   const [error, setError] = useState("");
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const MODELS_BATCH_SIZE = 40;
+  const VIDEOS_BATCH_SIZE = 60;
+
+  const videoApiSort: "latest" | "views" = sortMode === "latest" ? "latest" : "views";
 
   useEffect(() => {
     let cancelled = false;
@@ -67,18 +79,26 @@ export default function DiscoverPage() {
         setLoadingModels(true);
         setError("");
         const [modelItems, videos] = await Promise.all([
-          fetchModelSummaries({ limit: 120 }),
-          fetchAllVideos({ sort: "views", limitPerPage: 60, maxPages: 2 })
+          fetchModelSummaries({ limit: MODELS_BATCH_SIZE, offset: 0 }),
+          fetchVideos({ sort: videoApiSort, page: 1, limit: VIDEOS_BATCH_SIZE })
         ]);
         if (!cancelled) {
           const playable = videos.filter((item) => Boolean(item.hlsBaseUrl));
           setModels(modelItems);
+          setModelsOffset(modelItems.length);
+          setModelsHasMore(modelItems.length === MODELS_BATCH_SIZE);
           setMediaItems(playable.length > 0 ? playable : videos);
+          setVideosPage(1);
+          setVideosHasMore(videos.length === VIDEOS_BATCH_SIZE);
         }
       } catch (err) {
         if (!cancelled) {
           setModels([]);
           setMediaItems([]);
+          setModelsOffset(0);
+          setModelsHasMore(false);
+          setVideosPage(1);
+          setVideosHasMore(false);
           setError(err instanceof Error ? err.message : "Failed to load discover data");
         }
       } finally {
@@ -94,7 +114,72 @@ export default function DiscoverPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [videoApiSort]);
+
+  useEffect(() => {
+    if (activeTab === "models" && !modelsHasMore) return;
+    if (activeTab === "videos" && !videosHasMore) return;
+
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (!entry?.isIntersecting) return;
+
+      if (activeTab === "models" && !loadingModels && !loadingMoreModels && modelsHasMore) {
+        setLoadingMoreModels(true);
+        void fetchModelSummaries({ limit: MODELS_BATCH_SIZE, offset: modelsOffset })
+          .then((nextModels) => {
+            setModels((prev) => {
+              const merged = [...prev, ...nextModels];
+              const seen = new Set<string>();
+              return merged.filter((item) => {
+                if (seen.has(item.slug)) return false;
+                seen.add(item.slug);
+                return true;
+              });
+            });
+            setModelsOffset((prev) => prev + nextModels.length);
+            setModelsHasMore(nextModels.length === MODELS_BATCH_SIZE);
+          })
+          .catch((err) => {
+            setError(err instanceof Error ? err.message : "Failed to load more models");
+          })
+          .finally(() => {
+            setLoadingMoreModels(false);
+          });
+      }
+
+      if (activeTab === "videos" && !loadingMedia && !loadingMoreVideos && videosHasMore) {
+        const nextPage = videosPage + 1;
+        setLoadingMoreVideos(true);
+        void fetchVideos({ sort: videoApiSort, page: nextPage, limit: VIDEOS_BATCH_SIZE })
+          .then((nextVideos) => {
+            setMediaItems((prev) => {
+              const merged = [...prev, ...nextVideos];
+              const seen = new Set<string>();
+              return merged.filter((item) => {
+                if (seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+              });
+            });
+            setVideosPage(nextPage);
+            setVideosHasMore(nextVideos.length === VIDEOS_BATCH_SIZE);
+          })
+          .catch((err) => {
+            setError(err instanceof Error ? err.message : "Failed to load more videos");
+          })
+          .finally(() => {
+            setLoadingMoreVideos(false);
+          });
+      }
+    }, { rootMargin: "300px 0px" });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activeTab, loadingMedia, loadingModels, loadingMoreModels, loadingMoreVideos, modelsHasMore, modelsOffset, videoApiSort, videosHasMore, videosPage]);
 
   const sortedModels = useMemo(
     () => [...models].sort((a, b) => modelScore(b, sortMode) - modelScore(a, sortMode)),
@@ -224,7 +309,7 @@ export default function DiscoverPage() {
 
       {!loadingModels && !loadingMedia && !error && activeTab === "videos" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {sortedMedia.slice(0, 60).map((item) => (
+          {sortedMedia.map((item) => (
             <Link
               key={item.id}
               to={`/clips/${item.id}`}
@@ -277,6 +362,16 @@ export default function DiscoverPage() {
             </Link>
           ))}
         </section>
+      )}
+
+      {!loadingModels && !loadingMedia && !error && (activeTab === "models" || activeTab === "videos") && (
+        <div ref={loadMoreRef} className="h-10 flex items-center justify-center text-xs text-white/60">
+          {(activeTab === "models" && loadingMoreModels) || (activeTab === "videos" && loadingMoreVideos)
+            ? "Loading more..."
+            : activeTab === "models"
+              ? (modelsHasMore ? "Scroll for more models" : "All models loaded")
+              : (videosHasMore ? "Scroll for more videos" : "All videos loaded")}
+        </div>
       )}
     </div>
   );

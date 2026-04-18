@@ -16,6 +16,9 @@ const START_INDEX = Number.parseInt(process.env.START_INDEX ?? "1", 10) || 1;
 const MAX_RETRIES = Number.parseInt(process.env.MAX_RETRIES ?? "3", 10) || 3;
 const MAX_FILE_BYTES = Number.parseInt(process.env.MAX_FILE_BYTES ?? `${2 * 1024 * 1024 * 1024}`, 10);
 const FORCE_UPLOAD = ["1", "true", "yes"].includes(String(process.env.FORCE_UPLOAD ?? "").toLowerCase());
+const ACCOUNT_TITLE_DEDUPE = !["0", "false", "no"].includes(String(process.env.ACCOUNT_TITLE_DEDUPE ?? "true").toLowerCase());
+const RETRY_SKIPPED = ["1", "true", "yes"].includes(String(process.env.RETRY_SKIPPED ?? "false").toLowerCase());
+const ALLOW_DUPLICATE_TITLES = ["1", "true", "yes"].includes(String(process.env.ALLOW_DUPLICATE_TITLES ?? "false").toLowerCase());
 const UPLOAD_CONCURRENCY = Math.min(Math.max(Number.parseInt(process.env.UPLOAD_CONCURRENCY ?? "4", 10) || 4, 1), 16);
 const REMOTE_TITLE_CHECK = ["1", "true", "yes"].includes(String(process.env.REMOTE_TITLE_CHECK ?? "false").toLowerCase());
 const SIGNATURE_MODE = String(process.env.SIGNATURE_MODE ?? "quick").toLowerCase() === "sha1" ? "sha1" : "quick";
@@ -222,7 +225,7 @@ async function reserveFile(checkpoint, filePath, title, signature, normalizedTit
     title,
     at: now
   };
-  if (normalizedTitle) {
+  if (normalizedTitle && !ALLOW_DUPLICATE_TITLES) {
     checkpoint.uploadedTitles[normalizedTitle] = {
       status: "RESERVED",
       title,
@@ -432,6 +435,9 @@ async function main() {
   console.log(`Uploading to: ${UPLOAD_URL}`);
   console.log(`Checkpoint: ${CHECKPOINT_PATH}`);
   console.log(`Force upload: ${FORCE_UPLOAD ? "enabled" : "disabled"}`);
+  console.log(`Account title dedupe: ${ACCOUNT_TITLE_DEDUPE ? "enabled" : "disabled"}`);
+  console.log(`Allow duplicate titles: ${ALLOW_DUPLICATE_TITLES ? "enabled" : "disabled"}`);
+  console.log(`Retry skipped checkpoint entries: ${RETRY_SKIPPED ? "enabled" : "disabled"}`);
   console.log(`Upload concurrency: ${UPLOAD_CONCURRENCY}`);
   console.log(`Signature mode: ${SIGNATURE_MODE}`);
   console.log(`Remote title check: ${REMOTE_TITLE_CHECK ? "enabled" : "disabled"}`);
@@ -447,7 +453,7 @@ async function main() {
   console.log(`Creator channel: ${creatorChannelId}`);
 
   const checkpoint = await loadCheckpoint();
-  const existingMyTitles = FORCE_UPLOAD ? new Set() : await loadExistingMyTitleSet();
+  const existingMyTitles = FORCE_UPLOAD || !ACCOUNT_TITLE_DEDUPE || ALLOW_DUPLICATE_TITLES ? new Set() : await loadExistingMyTitleSet();
   const seenSignatures = new Set(Object.keys(checkpoint.uploadedSignatures || {}));
   const seenTitles = new Set([
     ...Object.keys(checkpoint.uploadedTitles || {}),
@@ -475,6 +481,19 @@ async function main() {
 
       const checkpointEntry = checkpoint.uploaded[filePath];
       if (checkpointEntry && checkpointEntry.status !== "RESERVED") {
+        if (RETRY_SKIPPED && checkpointEntry.status === "SKIPPED") {
+          delete checkpoint.uploaded[filePath];
+          if (checkpointEntry.signature) {
+            delete checkpoint.uploadedSignatures[checkpointEntry.signature];
+          }
+          const normalizedTitle = normalizeTitle(checkpointEntry.title);
+          if (normalizedTitle) {
+            delete checkpoint.uploadedTitles[normalizedTitle];
+          }
+          await saveCheckpoint(checkpoint);
+          return { filePath, index };
+        }
+
         checkpointSkipped += 1;
         console.log(`[${index}/${files.length}] Skipped (checkpoint): ${path.basename(filePath)}`);
         continue;
@@ -532,7 +551,7 @@ async function main() {
             return "signature";
           }
 
-          if (normalizedTitle && seenTitles.has(normalizedTitle)) {
+          if (!ALLOW_DUPLICATE_TITLES && normalizedTitle && seenTitles.has(normalizedTitle)) {
             checkpoint.uploaded[filePath] = { status: "SKIPPED", skipped: true, title, signature, reason: "title", at: new Date().toISOString() };
             checkpoint.uploadedSignatures[signature] = { status: "SKIPPED", skipped: true, title, at: new Date().toISOString() };
             await saveCheckpoint(checkpoint);
@@ -552,7 +571,7 @@ async function main() {
         return;
       }
 
-      if (!FORCE_UPLOAD && REMOTE_TITLE_CHECK) {
+      if (!FORCE_UPLOAD && REMOTE_TITLE_CHECK && !ALLOW_DUPLICATE_TITLES) {
         const alreadyExists = await existsByTitle(title);
         if (alreadyExists) {
           await withStateLock(async () => {
@@ -600,7 +619,7 @@ async function main() {
         success.push(uploaded);
         checkpoint.uploaded[filePath] = { status: "UPLOADED", id: uploaded.videoId, title: uploaded.title, signature, at: new Date().toISOString() };
         checkpoint.uploadedSignatures[signature] = { status: "UPLOADED", id: uploaded.videoId, title: uploaded.title, at: new Date().toISOString() };
-        if (normalizedTitle) {
+        if (normalizedTitle && !ALLOW_DUPLICATE_TITLES) {
           checkpoint.uploadedTitles[normalizedTitle] = { status: "UPLOADED", id: uploaded.videoId, title: uploaded.title, at: new Date().toISOString() };
           seenTitles.add(normalizedTitle);
         }

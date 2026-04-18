@@ -395,6 +395,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/models", async (request, reply) => {
     const q = String((request.query as { q?: string }).q || "").trim().toLowerCase();
     const limit = Math.min(Math.max(Number((request.query as { limit?: string | number }).limit || 40), 1), 80);
+    const offset = Math.max(Number((request.query as { offset?: string | number }).offset || 0), 0);
 
     const items = await fastify.prisma.video.findMany({
       where: {
@@ -483,20 +484,25 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const result = [...index.values()]
+    const filtered = [...index.values()]
       .filter((entry) => {
         if (!q) return true;
         return entry.slug.includes(q.replace(/\s+/g, "-")) || entry.name.toLowerCase().includes(q);
       })
       .sort((a, b) => b.videoCount - a.videoCount || b.totalViews - a.totalViews || b.latestAt - a.latestAt)
-      .slice(0, limit)
+      .slice(offset, offset + limit)
       .map(({ latestAt, creatorIds, ...entry }) => ({
         ...entry,
         creatorCount: creatorIds.size
       }));
 
+    const total = [...index.values()].filter((entry) => {
+      if (!q) return true;
+      return entry.slug.includes(q.replace(/\s+/g, "-")) || entry.name.toLowerCase().includes(q);
+    }).length;
+
     reply.header("Cache-Control", "public, max-age=120");
-    return { items: result };
+    return { items: filtered, pagination: { offset, limit, total } };
   });
 
   fastify.get("/models/:slug", async (request, reply) => {

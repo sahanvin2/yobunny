@@ -266,15 +266,19 @@ export async function fetchSearchModels(query: string) {
   return data.items;
 }
 
-export async function fetchModelSummaries(params?: { q?: string; limit?: number }) {
+export async function fetchModelSummaries(params?: { q?: string; limit?: number; offset?: number }) {
   const query = new URLSearchParams();
   if (params?.q?.trim()) query.set("q", params.q.trim());
   if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset && params.offset > 0) query.set("offset", String(params.offset));
 
   const qs = query.toString();
   const res = await fetch(`${API_BASE}/videos/models${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch models");
-  const data = await res.json() as { items: ApiModelSummary[] };
+  const data = await res.json() as {
+    items: ApiModelSummary[];
+    pagination?: { offset: number; limit: number; total: number };
+  };
   return data.items;
 }
 

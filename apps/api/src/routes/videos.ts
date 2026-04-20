@@ -313,6 +313,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const where = {
       status: "READY" as const,
       visibility: "PUBLIC" as const,
+      rawFileKey: { not: "pending" as const },
+      duration: { gt: 0 },
+      thumbnailUrl: { not: null },
+      NOT: [{ thumbnailUrl: "" }],
       ...(category ? { category } : {})
     };
 
@@ -337,6 +341,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         status: "READY",
         visibility: "PUBLIC",
+        rawFileKey: { not: "pending" },
+        duration: { gt: 0 },
+        thumbnailUrl: { not: null },
+        NOT: [{ thumbnailUrl: "" }],
         publishedAt: { gte: since }
       },
       orderBy: { viewCount: "desc" },
@@ -375,6 +383,10 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         status: "READY",
         visibility: "PUBLIC",
+        rawFileKey: { not: "pending" },
+        duration: { gt: 0 },
+        thumbnailUrl: { not: null },
+        NOT: [{ thumbnailUrl: "" }],
         OR: [
           { title: { contains: q.data, mode: "insensitive" } },
           { description: { contains: q.data, mode: "insensitive" } },
@@ -396,7 +408,11 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const items = await fastify.prisma.video.findMany({
       where: {
         status: "READY",
-        visibility: "PUBLIC"
+        visibility: "PUBLIC",
+        rawFileKey: { not: "pending" },
+        duration: { gt: 0 },
+        thumbnailUrl: { not: null },
+        NOT: [{ thumbnailUrl: "" }]
       },
       select: {
         id: true,
@@ -510,7 +526,11 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const allVideos = await fastify.prisma.video.findMany({
       where: {
         status: "READY",
-        visibility: "PUBLIC"
+        visibility: "PUBLIC",
+        rawFileKey: { not: "pending" },
+        duration: { gt: 0 },
+        thumbnailUrl: { not: null },
+        NOT: [{ thumbnailUrl: "" }]
       },
       include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true, bio: true } } },
       orderBy: { publishedAt: "desc" },

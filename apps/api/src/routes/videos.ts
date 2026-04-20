@@ -59,10 +59,6 @@ function normalizeModelSlug(input: string) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  if (normalized === "cherry-moon") {
-    return "leia-von";
-  }
-
   return normalized;
 }
 

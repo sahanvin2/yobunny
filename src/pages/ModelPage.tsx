@@ -44,10 +44,7 @@ export default function ModelPage() {
     };
   }, [slug]);
 
-  const shorts = useMemo(() => {
-    const playable = items.filter((video) => Boolean(video.hlsBaseUrl));
-    return sortShortsVideos(playable.length > 0 ? playable : items);
-  }, [items]);
+  const shorts = useMemo(() => sortShortsVideos(items), [items]);
 
   if (loading) {
     return <div className="p-4 sm:p-6 text-sm text-white/65">Loading model profile...</div>;

@@ -74,7 +74,7 @@ export default function ClipsPage() {
   const [sourceById, setSourceById] = useState<Record<string, string>>({});
   const [fallbackTriedById, setFallbackTriedById] = useState<Record<string, boolean>>({});
   const [panel, setPanel] = useState<OverlayPanel>({ type: "none" });
-  const [playerReady, setPlayerReady] = useState(!Boolean(id));
+  const [playerReady, setPlayerReady] = useState(!id);
 
   const isPlayerMode = true;
 
@@ -97,9 +97,7 @@ export default function ClipsPage() {
       const portraitItems = tagBasedPortraits.length > 0
         ? tagBasedPortraits
         : (await partitionVideosByFormat(items)).clips;
-      const cleanPortraits = portraitItems.filter((item) => Boolean(item.hlsBaseUrl));
-      const fallbackPlayable = items.filter((item) => Boolean(item.hlsBaseUrl));
-      const sourceItems = cleanPortraits.length > 0 ? cleanPortraits : fallbackPlayable;
+      const sourceItems = portraitItems.length > 0 ? portraitItems : items;
 
       setClips((prev) => {
         const base = replace ? [] : prev;
@@ -114,8 +112,8 @@ export default function ClipsPage() {
         setSourceById((prevSources) => {
           const nextSources = { ...prevSources };
           for (const item of sourceItems) {
-            if (!nextSources[item.id] && item.hlsBaseUrl) {
-              nextSources[item.id] = item.hlsBaseUrl;
+            if (!nextSources[item.id]) {
+              nextSources[item.id] = item.hlsBaseUrl || `${API_BASE}/videos/${item.id}/stream`;
             }
           }
           return nextSources;
@@ -373,7 +371,7 @@ export default function ClipsPage() {
     }
   }, []);
 
-  const shorts = useMemo(() => clips.filter((item) => Boolean(item.hlsBaseUrl)), [clips]);
+  const shorts = useMemo(() => clips.filter(isClipLikeVideo), [clips]);
 
   if (loading) {
     return <div className="p-4 lg:p-6 text-sm text-muted-foreground">Loading clips...</div>;
@@ -407,7 +405,7 @@ export default function ClipsPage() {
                   ref={(node) => {
                     videoRefs.current[video.id] = node;
                   }}
-                  src={sourceById[video.id] || video.hlsBaseUrl}
+                  src={sourceById[video.id] || video.hlsBaseUrl || `${API_BASE}/videos/${video.id}/stream`}
                   poster={video.thumbnailUrl}
                   controls={false}
                   autoPlay={isActive}

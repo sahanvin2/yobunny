@@ -22,6 +22,16 @@ const ALLOW_DUPLICATE_TITLES = ["1", "true", "yes"].includes(String(process.env.
 const UPLOAD_CONCURRENCY = Math.min(Math.max(Number.parseInt(process.env.UPLOAD_CONCURRENCY ?? "4", 10) || 4, 1), 16);
 const REMOTE_TITLE_CHECK = ["1", "true", "yes"].includes(String(process.env.REMOTE_TITLE_CHECK ?? "false").toLowerCase());
 const SIGNATURE_MODE = String(process.env.SIGNATURE_MODE ?? "quick").toLowerCase() === "sha1" ? "sha1" : "quick";
+const SKIP_AUTO_THUMBNAIL = ["1", "true", "yes"].includes(String(process.env.SKIP_AUTO_THUMBNAIL ?? "true").toLowerCase());
+const SKIP_DURATION_PROBE = ["1", "true", "yes"].includes(String(process.env.SKIP_DURATION_PROBE ?? "true").toLowerCase());
+const UPLOAD_TIMEOUT_MS = Math.min(Math.max(Number.parseInt(process.env.UPLOAD_TIMEOUT_MS ?? "600000", 10) || 600000, 30000), 3600000);
+const RETRY_BASE_DELAY_MS = Math.min(Math.max(Number.parseInt(process.env.RETRY_BASE_DELAY_MS ?? "1500", 10) || 1500, 500), 10000);
+const LOG_CHECKPOINT_SKIPS = ["1", "true", "yes"].includes(String(process.env.LOG_CHECKPOINT_SKIPS ?? "false").toLowerCase());
+const LOG_DUPLICATE_SKIPS = ["1", "true", "yes"].includes(String(process.env.LOG_DUPLICATE_SKIPS ?? "false").toLowerCase());
+const CHECKPOINT_FLUSH_EVERY = Math.min(Math.max(Number.parseInt(process.env.CHECKPOINT_FLUSH_EVERY ?? "12", 10) || 12, 1), 200);
+const CLEAN_RESERVED_ON_START = !["0", "false", "no"].includes(String(process.env.CLEAN_RESERVED_ON_START ?? "true").toLowerCase());
+const RESERVED_MAX_AGE_MINUTES = Math.min(Math.max(Number.parseInt(process.env.RESERVED_MAX_AGE_MINUTES ?? "30", 10) || 30, 1), 1440);
+const PROGRESS_LOG_INTERVAL_MS = Math.min(Math.max(Number.parseInt(process.env.PROGRESS_LOG_INTERVAL_MS ?? "60000", 10) || 60000, 10000), 600000);
 const MODEL_NAMES_RAW = String(process.env.MODEL_NAMES ?? "").trim();
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"]);
@@ -134,10 +144,6 @@ async function fileSha1(filePath) {
 }
 
 async function buildFileSignature(filePath, stat) {
-  if (FORCE_UPLOAD) {
-    return `path-${crypto.createHash("sha1").update(filePath).digest("hex")}`;
-  }
-
   if (SIGNATURE_MODE === "sha1") {
     return fileSha1(filePath);
   }
@@ -209,7 +215,65 @@ async function loadCheckpoint() {
 }
 
 async function saveCheckpoint(checkpoint) {
+  checkpoint.__pendingWrites = (checkpoint.__pendingWrites || 0) + 1;
+  if (checkpoint.__pendingWrites < CHECKPOINT_FLUSH_EVERY) {
+    return;
+  }
+
+  checkpoint.__pendingWrites = 0;
   await fs.promises.writeFile(CHECKPOINT_PATH, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
+}
+
+async function flushCheckpoint(checkpoint) {
+  checkpoint.__pendingWrites = 0;
+  await fs.promises.writeFile(CHECKPOINT_PATH, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
+}
+
+function checkpointStatusCounts(checkpoint) {
+  const counts = {};
+  const uploaded = checkpoint?.uploaded && typeof checkpoint.uploaded === "object" ? checkpoint.uploaded : {};
+  for (const value of Object.values(uploaded)) {
+    const status = value && typeof value === "object" ? String(value.status || "UNKNOWN") : "UNKNOWN";
+    counts[status] = (counts[status] || 0) + 1;
+  }
+  return counts;
+}
+
+function cleanupStaleReservedEntries(checkpoint) {
+  if (!CLEAN_RESERVED_ON_START) {
+    return 0;
+  }
+
+  const uploaded = checkpoint?.uploaded && typeof checkpoint.uploaded === "object" ? checkpoint.uploaded : {};
+  const now = Date.now();
+  const maxAgeMs = RESERVED_MAX_AGE_MINUTES * 60 * 1000;
+  let removed = 0;
+
+  for (const [filePath, entry] of Object.entries(uploaded)) {
+    if (!entry || entry.status !== "RESERVED") {
+      continue;
+    }
+
+    const atMs = Date.parse(String(entry.at || ""));
+    const isStale = Number.isNaN(atMs) || (now - atMs) > maxAgeMs;
+    if (!isStale) {
+      continue;
+    }
+
+    delete checkpoint.uploaded[filePath];
+    if (entry.signature) {
+      delete checkpoint.uploadedSignatures[entry.signature];
+    }
+
+    const normalizedTitle = normalizeTitle(entry.title);
+    if (normalizedTitle) {
+      delete checkpoint.uploadedTitles[normalizedTitle];
+    }
+
+    removed += 1;
+  }
+
+  return removed;
 }
 
 async function reserveFile(checkpoint, filePath, title, signature, normalizedTitle) {
@@ -254,26 +318,44 @@ async function existsByTitle(title) {
   }
 }
 
-async function loadExistingMyTitleSet() {
-  const set = new Set();
-  const response = await fetchWithTimeout(MY_VIDEOS_URL, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${AUTH_UID}`
-    }
-  }, 60000);
-
-  if (!response.ok) {
-    return set;
+function toErrorMessage(error) {
+  if (error instanceof Error) {
+    return error.message;
   }
 
-  const payload = await response.json().catch(() => ({ items: [] }));
-  const items = Array.isArray(payload?.items) ? payload.items : [];
-  for (const item of items) {
-    const normalized = normalizeTitle(item?.title);
-    if (normalized) {
-      set.add(normalized);
+  return String(error);
+}
+
+async function loadExistingMyTitleSet() {
+  const set = new Set();
+  try {
+    const response = await fetchWithTimeout(MY_VIDEOS_URL, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${AUTH_UID}`
+      }
+    }, 60000);
+
+    if (!response.ok) {
+      return set;
     }
+
+    const payload = await response.json().catch(() => ({ items: [] }));
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    for (const item of items) {
+      // Do not let failed/incomplete uploads block legitimate retries.
+      if (typeof item?.status === "string" && item.status !== "READY") {
+        continue;
+      }
+
+      const normalized = normalizeTitle(item?.title);
+      if (normalized) {
+        set.add(normalized);
+      }
+    }
+  } catch {
+    // Network hiccups should not crash the entire batch run.
+    return set;
   }
 
   return set;
@@ -345,7 +427,7 @@ async function uploadOne(filePath, index, total, creatorChannelId, signature, mo
   const description = toDescription(title);
   const tags = toTags(title);
   const thumbnailPath = resolveThumbnailPath(filePath);
-  const uploadSessionId = FORCE_UPLOAD ? "" : buildUploadSessionId(signature, filePath);
+  const uploadSessionId = buildUploadSessionId(signature, filePath);
   const ext = path.extname(fileName).toLowerCase();
   const mime = ext === ".webm" ? "video/webm" : "video/mp4";
 
@@ -376,6 +458,12 @@ async function uploadOne(filePath, index, total, creatorChannelId, signature, mo
   if (uploadSessionId) {
     form.append("uploadSessionId", uploadSessionId);
   }
+  if (SKIP_AUTO_THUMBNAIL) {
+    form.append("skipAutoThumbnail", "1");
+  }
+  if (SKIP_DURATION_PROBE) {
+    form.append("skipDurationProbe", "1");
+  }
 
   const response = await fetchWithTimeout(
     UPLOAD_URL,
@@ -387,7 +475,7 @@ async function uploadOne(filePath, index, total, creatorChannelId, signature, mo
       },
       body: form
     },
-    600000
+    UPLOAD_TIMEOUT_MS
   );
 
   if (!response.ok) {
@@ -441,6 +529,15 @@ async function main() {
   console.log(`Upload concurrency: ${UPLOAD_CONCURRENCY}`);
   console.log(`Signature mode: ${SIGNATURE_MODE}`);
   console.log(`Remote title check: ${REMOTE_TITLE_CHECK ? "enabled" : "disabled"}`);
+  console.log(`Skip auto thumbnail: ${SKIP_AUTO_THUMBNAIL ? "enabled" : "disabled"}`);
+  console.log(`Skip duration probe: ${SKIP_DURATION_PROBE ? "enabled" : "disabled"}`);
+  console.log(`Upload timeout (ms): ${UPLOAD_TIMEOUT_MS}`);
+  console.log(`Log checkpoint skips: ${LOG_CHECKPOINT_SKIPS ? "enabled" : "disabled"}`);
+  console.log(`Log duplicate skips: ${LOG_DUPLICATE_SKIPS ? "enabled" : "disabled"}`);
+  console.log(`Checkpoint flush every: ${CHECKPOINT_FLUSH_EVERY}`);
+  console.log(`Clean stale reserved on start: ${CLEAN_RESERVED_ON_START ? "enabled" : "disabled"}`);
+  console.log(`Reserved max age (minutes): ${RESERVED_MAX_AGE_MINUTES}`);
+  console.log(`Progress log interval (ms): ${PROGRESS_LOG_INTERVAL_MS}`);
 
   const modelNames = deriveModelNames(absoluteAssetsDir);
   if (modelNames.length === 0) {
@@ -453,7 +550,16 @@ async function main() {
   console.log(`Creator channel: ${creatorChannelId}`);
 
   const checkpoint = await loadCheckpoint();
-  const existingMyTitles = FORCE_UPLOAD || !ACCOUNT_TITLE_DEDUPE || ALLOW_DUPLICATE_TITLES ? new Set() : await loadExistingMyTitleSet();
+  const removedReserved = cleanupStaleReservedEntries(checkpoint);
+  if (removedReserved > 0) {
+    await flushCheckpoint(checkpoint);
+    console.log(`Cleaned stale reserved entries: ${removedReserved}`);
+  }
+
+  const startupCounts = checkpointStatusCounts(checkpoint);
+  console.log(`Checkpoint status snapshot: ${JSON.stringify(startupCounts)}`);
+
+  const existingMyTitles = !ACCOUNT_TITLE_DEDUPE || ALLOW_DUPLICATE_TITLES ? new Set() : await loadExistingMyTitleSet();
   const seenSignatures = new Set(Object.keys(checkpoint.uploadedSignatures || {}));
   const seenTitles = new Set([
     ...Object.keys(checkpoint.uploadedTitles || {}),
@@ -463,6 +569,9 @@ async function main() {
   const failed = [];
   let checkpointSkipped = 0;
   let cursor = START_INDEX - 1;
+  const progressTimer = setInterval(() => {
+    console.log(`[progress] scanned=${Math.min(cursor, files.length)}/${files.length} succeeded=${success.length} failed=${failed.length} checkpointSkipped=${checkpointSkipped}`);
+  }, PROGRESS_LOG_INTERVAL_MS);
 
   // Serialize mutable state updates (checkpoint + in-memory dedupe sets)
   let stateQueue = Promise.resolve();
@@ -495,7 +604,9 @@ async function main() {
         }
 
         checkpointSkipped += 1;
-        console.log(`[${index}/${files.length}] Skipped (checkpoint): ${path.basename(filePath)}`);
+        if (LOG_CHECKPOINT_SKIPS) {
+          console.log(`[${index}/${files.length}] Skipped (checkpoint): ${path.basename(filePath)}`);
+        }
         continue;
       }
 
@@ -544,34 +655,34 @@ async function main() {
       const signature = await buildFileSignature(filePath, stat);
 
       const localDuplicate = await withStateLock(async () => {
-        if (!FORCE_UPLOAD) {
-          if (seenSignatures.has(signature)) {
-            checkpoint.uploaded[filePath] = { status: "SKIPPED", skipped: true, title, signature, reason: "signature", at: new Date().toISOString() };
-            await saveCheckpoint(checkpoint);
-            return "signature";
-          }
+        if (seenSignatures.has(signature)) {
+          checkpoint.uploaded[filePath] = { status: "SKIPPED", skipped: true, title, signature, reason: "signature", at: new Date().toISOString() };
+          await saveCheckpoint(checkpoint);
+          return "signature";
+        }
 
-          if (!ALLOW_DUPLICATE_TITLES && normalizedTitle && seenTitles.has(normalizedTitle)) {
-            checkpoint.uploaded[filePath] = { status: "SKIPPED", skipped: true, title, signature, reason: "title", at: new Date().toISOString() };
-            checkpoint.uploadedSignatures[signature] = { status: "SKIPPED", skipped: true, title, at: new Date().toISOString() };
-            await saveCheckpoint(checkpoint);
-            return "title";
-          }
+        if (!ALLOW_DUPLICATE_TITLES && normalizedTitle && seenTitles.has(normalizedTitle)) {
+          checkpoint.uploaded[filePath] = { status: "SKIPPED", skipped: true, title, signature, reason: "title", at: new Date().toISOString() };
+          checkpoint.uploadedSignatures[signature] = { status: "SKIPPED", skipped: true, title, at: new Date().toISOString() };
+          await saveCheckpoint(checkpoint);
+          return "title";
         }
 
         return "";
       });
 
       if (localDuplicate) {
-        if (localDuplicate === "signature") {
-          console.log(`[${index}/${files.length}] Skipped (duplicate signature): ${fileName}`);
-        } else {
-          console.log(`[${index}/${files.length}] Skipped (duplicate title): ${fileName} -> ${title}`);
+        if (LOG_DUPLICATE_SKIPS) {
+          if (localDuplicate === "signature") {
+            console.log(`[${index}/${files.length}] Skipped (duplicate signature): ${fileName}`);
+          } else {
+            console.log(`[${index}/${files.length}] Skipped (duplicate title): ${fileName} -> ${title}`);
+          }
         }
         return;
       }
 
-      if (!FORCE_UPLOAD && REMOTE_TITLE_CHECK && !ALLOW_DUPLICATE_TITLES) {
+      if (REMOTE_TITLE_CHECK && !ALLOW_DUPLICATE_TITLES) {
         const alreadyExists = await existsByTitle(title);
         if (alreadyExists) {
           await withStateLock(async () => {
@@ -584,7 +695,9 @@ async function main() {
             seenSignatures.add(signature);
             await saveCheckpoint(checkpoint);
           });
-          console.log(`[${index}/${files.length}] Skipped (already exists): ${fileName} -> ${title}`);
+          if (LOG_DUPLICATE_SKIPS) {
+            console.log(`[${index}/${files.length}] Skipped (already exists): ${fileName} -> ${title}`);
+          }
           return;
         }
       }
@@ -605,7 +718,7 @@ async function main() {
             throw error;
           }
 
-          const waitMs = 3000 * attempt;
+          const waitMs = RETRY_BASE_DELAY_MS * attempt;
           console.log(`[${index}/${files.length}] Retry ${attempt}/${MAX_RETRIES - 1} in ${waitMs}ms: ${fileName}`);
           await sleep(waitMs);
         }
@@ -627,7 +740,7 @@ async function main() {
         await saveCheckpoint(checkpoint);
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = `[${index}/${files.length}] ${path.basename(filePath)} failed: ${toErrorMessage(error)}`;
       console.error(message);
       await withStateLock(async () => {
         failed.push({ filePath, message });
@@ -648,6 +761,8 @@ async function main() {
   });
 
   await Promise.all(workers);
+  clearInterval(progressTimer);
+  await flushCheckpoint(checkpoint);
 
   console.log("\n=== Upload Summary ===");
   console.log(`Total: ${files.length}`);
@@ -666,6 +781,7 @@ async function main() {
 
   return 0;
   } finally {
+    // No-op if already cleared after normal completion.
     await fs.promises.unlink(LOCK_PATH).catch(() => undefined);
   }
 }

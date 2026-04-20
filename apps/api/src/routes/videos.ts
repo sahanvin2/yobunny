@@ -44,7 +44,7 @@ const PLAYABLE_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 const USER_UPLOAD_EXTENSIONS = new Set(["mp4"]);
 const THUMB_WIDTHS = new Set([320, 640, 960, 1280]);
 const MODEL_TAG_PREFIX = "__MODEL__:";
-const MODEL_BROWSE_SCAN_LIMIT = 1600;
+const MODEL_BROWSE_SCAN_LIMIT = 50000;
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MODEL_METADATA_AGE_PREFIX = "__AGE__:";
 const MODEL_METADATA_MEASUREMENTS_PREFIX = "__MEASUREMENTS__:";
@@ -747,6 +747,8 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const modelNamesRaw = String(fields.modelNames || "");
     const creatorChannelId = String(fields.creatorChannelId || "").trim();
     const uploadSessionId = String(request.headers["x-upload-session-id"] ?? fields.uploadSessionId ?? "").trim();
+    const skipAutoThumbnail = ["1", "true", "yes"].includes(String(request.headers["x-skip-auto-thumbnail"] ?? fields.skipAutoThumbnail ?? "").toLowerCase());
+    const skipDurationProbe = ["1", "true", "yes"].includes(String(request.headers["x-skip-duration-probe"] ?? fields.skipDurationProbe ?? "").toLowerCase());
     const videoWidth = Number.parseInt(String(fields.videoWidth || "0"), 10) || 0;
     const videoHeight = Number.parseInt(String(fields.videoHeight || "0"), 10) || 0;
     const clientDuration = Number.parseInt(String(fields.videoDuration || "0"), 10) || 0;
@@ -846,13 +848,18 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
 
       const fileKey = `raw/${dbUser.id}/${video.id}/original.${ext}`;
       const buffer = videoUpload.buffer;
-      let playbackUrl: string;
       let storedRawFileKey = fileKey;
 
-      // Extract video duration
-      fastify.log.info({ fileSize: buffer.length }, "Extracting video duration");
-      const videoDuration = await extractVideoDuration(buffer);
-      const effectiveDuration = videoDuration > 0 ? videoDuration : clientDuration;
+      let effectiveDuration = clientDuration;
+      if (!skipDurationProbe) {
+        fastify.log.info({ fileSize: buffer.length }, "Extracting video duration");
+        const videoDuration = await extractVideoDuration(buffer);
+        if (videoDuration > 0) {
+          effectiveDuration = videoDuration;
+        }
+      } else {
+        fastify.log.info({ videoId: video.id }, "Skipping duration probe for bulk upload");
+      }
       const isPortrait = videoWidth > 0 && videoHeight > 0 && videoHeight > videoWidth;
       const shouldAutoClip = effectiveDuration > 0 && effectiveDuration <= 60 && isPortrait;
       const finalTags = shouldAutoClip && !tagsWithSession.includes(AUTO_CLIP_TAG)
@@ -865,7 +872,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
       const videoKey = `mp4/${video.id}/original.${ext}`;
       const b2VideoUploaded = await uploadObjectToB2(videoKey, buffer, videoUpload.mimetype || `video/${ext}`, 300000); // 5 mins timeout
       storedRawFileKey = b2VideoUploaded.key;
-      playbackUrl = b2VideoUploaded.publicUrl;
+      const playbackUrl = b2VideoUploaded.publicUrl;
       fastify.log.info({ playbackUrl }, "Video saved to B2");
 
       let thumbnailUrl: string | undefined;
@@ -885,7 +892,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         } catch {
           fastify.log.warn("Thumbnail processing failed");
         }
-      } else {
+      } else if (!skipAutoThumbnail) {
         try {
           const generatedThumbBuffer = await createThumbnailFromVideoBuffer(buffer);
           if (generatedThumbBuffer) {
@@ -899,6 +906,8 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
         } catch (thumbError) {
           fastify.log.warn({ error: String(thumbError), videoId: video.id }, "Auto thumbnail generation failed");
         }
+      } else {
+        fastify.log.info({ videoId: video.id }, "Skipping auto thumbnail generation for bulk upload");
       }
 
       fastify.log.info({ videoId: video.id }, "Updating video record with final URLs");
@@ -1109,7 +1118,7 @@ const videosRoutes: FastifyPluginAsync = async (fastify) => {
     const ext = extFromKey(video.rawFileKey) || "mp4";
     if (await hasLocalObject(video.rawFileKey)) {
       reply.header("Content-Type", "application/octet-stream");
-      reply.header("Content-Disposition", `attachment; filename=\"${video.title.replace(/\s+/g, "_")}.${ext}\"`);
+      reply.header("Content-Disposition", `attachment; filename="${video.title.replace(/\s+/g, "_")}.${ext}"`);
       return reply.send(createReadStream(resolveLocalObjectPath(video.rawFileKey)));
     }
 

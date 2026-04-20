@@ -78,28 +78,37 @@ export default function DiscoverPage() {
         setLoadingMedia(true);
         setLoadingModels(true);
         setError("");
-        const [modelItems, videos] = await Promise.all([
+        const [modelsResult, videosResult] = await Promise.allSettled([
           fetchModelSummaries({ limit: MODELS_BATCH_SIZE, offset: 0 }),
           fetchVideos({ sort: videoApiSort, page: 1, limit: VIDEOS_BATCH_SIZE })
         ]);
-        if (!cancelled) {
-          const playable = videos.filter((item) => Boolean(item.hlsBaseUrl));
-          setModels(modelItems);
-          setModelsOffset(modelItems.length);
-          setModelsHasMore(modelItems.length === MODELS_BATCH_SIZE);
-          setMediaItems(playable.length > 0 ? playable : videos);
-          setVideosPage(1);
-          setVideosHasMore(videos.length === VIDEOS_BATCH_SIZE);
+
+        if (cancelled) {
+          return;
         }
-      } catch (err) {
-        if (!cancelled) {
+
+        if (modelsResult.status === "fulfilled") {
+          setModels(modelsResult.value);
+          setModelsOffset(modelsResult.value.length);
+          setModelsHasMore(modelsResult.value.length === MODELS_BATCH_SIZE);
+        } else {
           setModels([]);
-          setMediaItems([]);
           setModelsOffset(0);
           setModelsHasMore(false);
+        }
+
+        if (videosResult.status === "fulfilled") {
+          setMediaItems(videosResult.value);
+          setVideosPage(1);
+          setVideosHasMore(videosResult.value.length === VIDEOS_BATCH_SIZE);
+        } else {
+          setMediaItems([]);
           setVideosPage(1);
           setVideosHasMore(false);
-          setError(err instanceof Error ? err.message : "Failed to load discover data");
+        }
+
+        if (modelsResult.status === "rejected" || videosResult.status === "rejected") {
+          setError("Some discover content could not be loaded");
         }
       } finally {
         if (!cancelled) {
@@ -272,7 +281,7 @@ export default function DiscoverPage() {
       {(loadingModels || loadingMedia) && <p className="text-sm text-white/60">Loading discover...</p>}
       {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {!loadingModels && !loadingMedia && !error && activeTab === "models" && (
+      {!loadingModels && !loadingMedia && activeTab === "models" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
           {sortedModels.map((model) => (
             <Link
@@ -307,7 +316,7 @@ export default function DiscoverPage() {
         </section>
       )}
 
-      {!loadingModels && !loadingMedia && !error && activeTab === "videos" && (
+      {!loadingModels && !loadingMedia && activeTab === "videos" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
           {sortedMedia.map((item) => (
             <Link
@@ -333,7 +342,7 @@ export default function DiscoverPage() {
         </section>
       )}
 
-      {!loadingModels && !loadingMedia && !error && activeTab === "niches" && (
+      {!loadingModels && !loadingMedia && activeTab === "niches" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {nicheCards.map((card, index) => (
             <Link
@@ -364,7 +373,7 @@ export default function DiscoverPage() {
         </section>
       )}
 
-      {!loadingModels && !loadingMedia && !error && (activeTab === "models" || activeTab === "videos") && (
+      {!loadingModels && !loadingMedia && (activeTab === "models" || activeTab === "videos") && (
         <div ref={loadMoreRef} className="h-10 flex items-center justify-center text-xs text-white/60">
           {(activeTab === "models" && loadingMoreModels) || (activeTab === "videos" && loadingMoreVideos)
             ? "Loading more..."

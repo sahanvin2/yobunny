@@ -52,10 +52,7 @@ export default function ChannelPage() {
     void load();
   }, [username]);
 
-  const shorts = useMemo(() => {
-    const playable = videos.filter((video) => Boolean(video.hlsBaseUrl));
-    return sortShortsVideos(playable.length > 0 ? playable : videos);
-  }, [videos]);
+  const shorts = useMemo(() => sortShortsVideos(videos), [videos]);
   const totalViews = useMemo(() => shorts.reduce((sum, video) => sum + video.viewCount, 0), [shorts]);
 
   if (!channel) {

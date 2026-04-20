@@ -176,7 +176,7 @@ export default function DashboardPage() {
                 {['1h', '1d', '7d', '1m', '1y'].map((f) => (
                   <button
                     key={f}
-                    onClick={() => setTimeFilter(f as any)}
+                    onClick={() => setTimeFilter(f as '1h' | '1d' | '7d' | '1m' | '1y')}
                     className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${timeFilter === f ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
                   >
                     {f.toUpperCase()}

@@ -11,9 +11,8 @@ export default function TrendingPage() {
   useEffect(() => {
     fetchTrendingVideos()
       .then((items) => {
-        const playable = items.filter((video) => Boolean(video.hlsBaseUrl));
-        const clips = playable.filter(isClipLikeVideo);
-        const source = clips.length > 0 ? clips : playable;
+        const clips = items.filter(isClipLikeVideo);
+        const source = clips.length > 0 ? clips : items;
         setTrending(sortShortsVideos(source));
       })
       .catch(() => setTrending([]))

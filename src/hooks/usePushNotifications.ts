@@ -25,7 +25,7 @@ export function usePushNotifications() {
                 const unread = data.items.filter(n => !n.isRead);
                 
                 if (isFirstRun) {
-                    unread.forEach((n: any) => notifiedSet.add(n.id));
+                    unread.forEach((notification) => notifiedSet.add(notification.id));
                     isFirstRun = false;
                     return;
                 }

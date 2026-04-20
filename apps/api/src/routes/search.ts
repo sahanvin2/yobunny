@@ -143,7 +143,7 @@ const searchRoutes: FastifyPluginAsync = async (fastify) => {
       include: { user: { select: { username: true, displayName: true } } }
     });
 
-    let candidates = baseCandidates;
+    const candidates = [...baseCandidates];
     if (candidates.length < 60) {
       const fallback = await fastify.prisma.video.findMany({
         where: {

@@ -1,23 +1,68 @@
 import { Link } from "react-router-dom";
 import { Clock, PlayCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDuration, formatRelativeTime, formatViewCount, type VideoData } from "@/lib/mockData";
+import { openSmartlinkAd } from "@/lib/smartlinkAd";
 
 interface ClipGridProps {
   clips: VideoData[];
   mode?: "grid" | "row";
+  hasMoreFromServer?: boolean;
+  loadingMore?: boolean;
+  onReachEnd?: () => void | Promise<void>;
 }
 
-export default function ClipGrid({ clips, mode = "grid" }: ClipGridProps) {
+export default function ClipGrid({ clips, mode = "grid", hasMoreFromServer = false, loadingMore = false, onReachEnd }: ClipGridProps) {
+  const INITIAL_COUNT = 24;
+  const LOAD_MORE_COUNT = 24;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_COUNT);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const requestLockRef = useRef(false);
   const isRow = mode === "row";
+  const visibleClips = useMemo(() => clips.slice(0, visibleCount), [clips, visibleCount]);
+  const hasMoreLocal = visibleCount < clips.length;
+  const canRequestMore = Boolean(onReachEnd && hasMoreFromServer);
+
+  useEffect(() => {
+    if (isRow) return;
+    if (!hasMoreLocal && !canRequestMore) return;
+    if (!sentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+
+        if (hasMoreLocal) {
+          setVisibleCount((count) => Math.min(count + LOAD_MORE_COUNT, clips.length));
+          return;
+        }
+
+        if (canRequestMore && !loadingMore && !requestLockRef.current) {
+          requestLockRef.current = true;
+          Promise.resolve(onReachEnd?.()).finally(() => {
+            requestLockRef.current = false;
+          });
+        }
+      },
+      {
+        rootMargin: "800px 0px"
+      }
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [canRequestMore, clips.length, hasMoreLocal, isRow, loadingMore, onReachEnd]);
 
   return (
     <section>
       <div className={isRow ? "overflow-x-auto pb-2" : ""}>
         <div className={isRow ? "flex gap-4 min-w-max snap-x snap-mandatory" : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"}>
-          {clips.map((clip) => (
+          {visibleClips.map((clip) => (
             <Link
               key={clip.id}
               to={`/clips/${clip.id}`}
+              onClick={() => openSmartlinkAd()}
               className={`group rounded-[1.75rem] overflow-hidden border border-border/60 bg-surface/70 hover:bg-surface-hover transition-colors shadow-sm ${isRow ? "w-[190px] sm:w-[220px] flex-shrink-0 snap-start" : ""}`}
             >
               <div className="relative aspect-[9/16] bg-black overflow-hidden">
@@ -50,6 +95,7 @@ export default function ClipGrid({ clips, mode = "grid" }: ClipGridProps) {
           ))}
         </div>
       </div>
+      {!isRow && (hasMoreLocal || canRequestMore) && <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />}
     </section>
   );
 }

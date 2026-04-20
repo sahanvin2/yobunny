@@ -90,3 +90,21 @@ export function sortShortsVideos(videos: VideoData[]) {
     return b.viewCount - a.viewCount;
   });
 }
+
+export function limitVideosPerCreator(videos: VideoData[], maxPerCreator: number) {
+  if (maxPerCreator <= 0) return [];
+
+  const counts = new Map<string, number>();
+  const out: VideoData[] = [];
+
+  for (const video of videos) {
+    const creatorKey = (video.channel.username || video.channel.displayName || "unknown").toLowerCase();
+    const current = counts.get(creatorKey) || 0;
+    if (current >= maxPerCreator) continue;
+
+    counts.set(creatorKey, current + 1);
+    out.push(video);
+  }
+
+  return out;
+}

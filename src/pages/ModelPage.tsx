@@ -5,6 +5,11 @@ import { fetchModelVideos, type ApiModelProfile } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
 import { sortFeedVideos, sortShortsVideos } from "@/lib/videoFeed";
 
+const MODEL_SLUG_ALIASES: Record<string, string[]> = {
+  "leia-von": ["cherry-moon"],
+  "cherry-moon": ["leia-von"]
+};
+
 export default function ModelPage() {
   const { slug = "" } = useParams();
   const [model, setModel] = useState<ApiModelProfile | null>(null);
@@ -19,10 +24,28 @@ export default function ModelPage() {
       try {
         setLoading(true);
         setError("");
-        const payload = await fetchModelVideos(slug);
-        if (!cancelled) {
-          setModel(payload.model);
-          setItems(sortFeedVideos(payload.items, "latest"));
+        try {
+          const payload = await fetchModelVideos(slug);
+          if (!cancelled) {
+            setModel(payload.model);
+            setItems(sortFeedVideos(payload.items, "latest"));
+          }
+          return;
+        } catch {
+          const aliases = MODEL_SLUG_ALIASES[slug] || [];
+          for (const alias of aliases) {
+            try {
+              const payload = await fetchModelVideos(alias);
+              if (!cancelled) {
+                setModel(payload.model);
+                setItems(sortFeedVideos(payload.items, "latest"));
+              }
+              return;
+            } catch {
+              // Continue fallback attempts.
+            }
+          }
+          throw new Error("Model not found");
         }
       } catch (err) {
         if (!cancelled) {

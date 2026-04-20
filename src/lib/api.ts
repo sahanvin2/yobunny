@@ -102,12 +102,32 @@ function mapUserToChannel(user?: ApiUser): VideoData["channel"] {
   };
 }
 
+function normalizeVideoTitle(rawTitle: string | undefined, videoId: string): string {
+  const trimmed = (rawTitle || "").trim();
+  if (!trimmed) {
+    return `Video ${videoId.slice(0, 8)}`;
+  }
+
+  const slugLike = !trimmed.includes(" ") && /[_-]/.test(trimmed);
+  if (!slugLike) {
+    return trimmed;
+  }
+
+  return trimmed
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((word) => (word ? `${word[0].toUpperCase()}${word.slice(1)}` : word))
+    .join(" ");
+}
+
 export function mapApiVideoToVideoData(video: ApiVideo): VideoData {
   const thumbVersion = encodeURIComponent(video.publishedAt || video.createdAt || "0");
   const fallbackThumb = `${API_BASE}/videos/${video.id}/thumbnail?v=${thumbVersion}`;
   return {
     id: video.id,
-    title: video.title,
+    title: normalizeVideoTitle(video.title, video.id),
     thumbnailUrl: video.thumbnailUrl || fallbackThumb,
     hlsBaseUrl: video.hlsBaseUrl || undefined,
     duration: video.duration || 0,
@@ -135,27 +155,6 @@ export function isClipLikeVideo(video: VideoData): boolean {
   return isAutoClipVideo(video) || hasPortraitTag(video);
 }
 
-const orientationCache = new Map<string, boolean>();
-
-async function detectPortraitFromThumbnail(video: VideoData): Promise<boolean> {
-  const key = video.id || video.thumbnailUrl;
-  if (orientationCache.has(key)) {
-    return orientationCache.get(key)!;
-  }
-
-  const isPortrait = await new Promise<boolean>((resolve) => {
-    const image = new Image();
-    image.loading = "eager";
-    image.referrerPolicy = "no-referrer";
-    image.onload = () => resolve(image.naturalHeight > image.naturalWidth);
-    image.onerror = () => resolve(false);
-    image.src = video.thumbnailUrl;
-  });
-
-  orientationCache.set(key, isPortrait);
-  return isPortrait;
-}
-
 function hasClipTag(video: VideoData): boolean {
   const tags = video.tags.map((tag) => tag.toLowerCase());
   return tags.includes(AUTO_CLIP_TAG.toLowerCase()) || tags.includes("__portrait__") || tags.includes("portrait");
@@ -165,15 +164,8 @@ export async function partitionVideosByFormat(videos: VideoData[]) {
   const clips: VideoData[] = [];
   const regularVideos: VideoData[] = [];
 
-  const checks = await Promise.all(videos.map(async (video) => {
-    let isClip = hasClipTag(video);
-    if (!isClip) {
-      isClip = await detectPortraitFromThumbnail(video);
-    }
-    return { video, isClip };
-  }));
-
-  for (const { video, isClip } of checks) {
+  for (const video of videos) {
+    const isClip = hasClipTag(video) || isAutoClipVideo(video);
     if (isClip) {
       clips.push(video);
     } else {
@@ -282,6 +274,36 @@ export async function fetchModelSummaries(params?: { q?: string; limit?: number;
   return data.items;
 }
 
+export async function fetchAllModelSummaries(params?: { q?: string; limitPerPage?: number; maxPages?: number }) {
+  const limitPerPage = Math.min(Math.max(params?.limitPerPage ?? 80, 1), 80);
+  const maxPages = Math.max(params?.maxPages ?? 8, 1);
+  const all: ApiModelSummary[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const offset = page * limitPerPage;
+    const items = await fetchModelSummaries({
+      q: params?.q,
+      limit: limitPerPage,
+      offset
+    });
+
+    let added = 0;
+    for (const item of items) {
+      if (seen.has(item.slug)) continue;
+      seen.add(item.slug);
+      all.push(item);
+      added += 1;
+    }
+
+    if (items.length < limitPerPage || added === 0) {
+      break;
+    }
+  }
+
+  return all;
+}
+
 export async function fetchModelVideos(modelSlug: string) {
   const res = await fetch(`${API_BASE}/videos/models/${encodeURIComponent(modelSlug)}`);
   if (!res.ok) throw new Error("Model not found");
@@ -379,24 +401,71 @@ export async function reportVideoView(videoId: string) {
 }
 
 export async function fetchSavedVideos() {
-  const res = await fetch(`${API_BASE}/users/me/saved`);
+  const pageResult = await fetchSavedVideosPage({ page: 1, limit: 200 });
+  return pageResult.items;
+}
+
+export async function fetchSavedVideosPage(params?: { page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/users/me/saved${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch saved videos");
-  const data = await res.json() as { items: Array<{ video: ApiVideo }> };
-  return data.items.map((item) => mapApiVideoToVideoData(item.video));
+  const data = await res.json() as {
+    items: Array<{ video: ApiVideo }>;
+    pagination?: { page: number; limit: number; total: number };
+  };
+  const items = data.items.map((item) => mapApiVideoToVideoData(item.video));
+  const page = data.pagination?.page || (params?.page || 1);
+  const limit = data.pagination?.limit || (params?.limit || items.length);
+  const total = data.pagination?.total || items.length;
+  return { items, hasMore: page * limit < total, total };
 }
 
 export async function fetchLikedVideos() {
-  const res = await fetch(`${API_BASE}/users/me/liked`);
+  const pageResult = await fetchLikedVideosPage({ page: 1, limit: 200 });
+  return pageResult.items;
+}
+
+export async function fetchLikedVideosPage(params?: { page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/users/me/liked${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch liked videos");
-  const data = await res.json() as { items: Array<{ video: ApiVideo }> };
-  return data.items.map((item) => mapApiVideoToVideoData(item.video));
+  const data = await res.json() as {
+    items: Array<{ video: ApiVideo }>;
+    pagination?: { page: number; limit: number; total: number };
+  };
+  const items = data.items.map((item) => mapApiVideoToVideoData(item.video));
+  const page = data.pagination?.page || (params?.page || 1);
+  const limit = data.pagination?.limit || (params?.limit || items.length);
+  const total = data.pagination?.total || items.length;
+  return { items, hasMore: page * limit < total, total };
 }
 
 export async function fetchHistoryVideos() {
-  const res = await fetch(`${API_BASE}/users/me/history`);
+  const pageResult = await fetchHistoryVideosPage({ page: 1, limit: 200 });
+  return pageResult.items;
+}
+
+export async function fetchHistoryVideosPage(params?: { page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/users/me/history${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch history");
-  const data = await res.json() as { items: Array<{ video: ApiVideo; watchedAt: string; watchPercent: number }> };
-  return data.items;
+  const data = await res.json() as {
+    items: Array<{ video: ApiVideo; watchedAt: string; watchPercent: number }>;
+    pagination?: { page: number; limit: number; total: number };
+  };
+  const page = data.pagination?.page || (params?.page || 1);
+  const limit = data.pagination?.limit || (params?.limit || data.items.length);
+  const total = data.pagination?.total || data.items.length;
+  return { items: data.items, hasMore: page * limit < total, total };
 }
 
 export async function fetchMe() {
@@ -456,10 +525,26 @@ export async function fetchDashboardStats() {
 }
 
 export async function fetchMyVideos() {
-  const res = await fetch(`${API_BASE}/users/me/videos`);
+  const pageResult = await fetchMyVideosPage({ page: 1, limit: 200 });
+  return pageResult.items;
+}
+
+export async function fetchMyVideosPage(params?: { page?: number; limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/users/me/videos${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch creator videos");
-  const data = await res.json() as { items: ApiVideo[] };
-  return data.items.filter((item) => item.status === "READY").map(mapApiVideoToVideoData);
+  const data = await res.json() as {
+    items: ApiVideo[];
+    pagination?: { page: number; limit: number; total: number };
+  };
+  const items = data.items.filter((item) => item.status === "READY").map(mapApiVideoToVideoData);
+  const page = data.pagination?.page || (params?.page || 1);
+  const limit = data.pagination?.limit || (params?.limit || items.length);
+  const total = data.pagination?.total || items.length;
+  return { items, hasMore: page * limit < total, total };
 }
 
 export type ManageVideoItem = {

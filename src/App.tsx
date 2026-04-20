@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -41,6 +41,11 @@ const RouteLoadingFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-sm text-white/60">Loading...</div>
 );
 
+const WatchRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={id ? `/clips/${id}` : "/clips"} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -53,10 +58,10 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route element={<MainLayout />}>
-                <Route path="/" element={<ClipsPage />} />
-                <Route path="/home" element={<ClipsPage />} />
+                <Route path="/" element={<Index />} />
+                <Route path="/home" element={<Index />} />
                 <Route path="/discover" element={<DiscoverPage />} />
-                <Route path="/watch/:id" element={<Navigate to="/clips" replace />} />
+                <Route path="/watch/:id" element={<WatchRedirect />} />
                 <Route
                   path="/upload"
                   element={

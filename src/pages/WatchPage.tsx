@@ -57,6 +57,7 @@ import {
   isClipLikeVideo
 } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { openSmartlinkAd } from "@/lib/smartlinkAd";
 
 const FALLBACK_VIDEO: VideoData = {
   id: "empty",
@@ -469,6 +470,7 @@ export default function WatchPage() {
     requireAuth(async () => {
       if (!id) return;
       try {
+        openSmartlinkAd();
         setDownloadStatus("Downloading...");
         const url = await fetchDownloadUrl(id);
         const response = await fetch(url);

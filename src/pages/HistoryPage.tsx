@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { fetchHistoryVideos, mapApiVideoToVideoData } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchHistoryVideosPage, mapApiVideoToVideoData } from "@/lib/api";
 import { formatViewCount, formatDuration, formatRelativeTime, type VideoData } from "@/lib/mockData";
 
 type HistoryItem = {
@@ -10,23 +10,85 @@ type HistoryItem = {
 };
 
 export default function HistoryPage() {
+  const PAGE_SIZE = 80;
+  const INITIAL_COUNT = 40;
+  const LOAD_MORE_COUNT = 40;
   const [items, setItems] = useState<HistoryItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMoreServer, setHasMoreServer] = useState(true);
+  const [loadingMoreServer, setLoadingMoreServer] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_COUNT);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    fetchHistoryVideos()
-      .then((rows) => setItems(rows.map((row) => ({ video: mapApiVideoToVideoData(row.video), watchedAt: row.watchedAt, watchPercent: row.watchPercent }))))
-      .catch(() => setItems([]));
+    fetchHistoryVideosPage({ page: 1, limit: PAGE_SIZE })
+      .then((result) => {
+        setItems(result.items.map((row) => ({ video: mapApiVideoToVideoData(row.video), watchedAt: row.watchedAt, watchPercent: row.watchPercent })));
+        setPage(1);
+        setHasMoreServer(result.hasMore);
+      })
+      .catch(() => {
+        setItems([]);
+        setHasMoreServer(false);
+      });
   }, []);
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_COUNT);
+  }, [items]);
+
+  useEffect(() => {
+    if (visibleCount >= items.length && !hasMoreServer) return;
+    if (!sentinelRef.current) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry?.isIntersecting) return;
+
+      if (visibleCount < items.length) {
+        setVisibleCount((count) => Math.min(count + LOAD_MORE_COUNT, items.length));
+        return;
+      }
+
+      if (!hasMoreServer || loadingMoreServer) return;
+      const nextPage = page + 1;
+      setLoadingMoreServer(true);
+      void fetchHistoryVideosPage({ page: nextPage, limit: PAGE_SIZE })
+        .then((result) => {
+          setItems((prev) => {
+            const merged = [...prev, ...result.items.map((row) => ({ video: mapApiVideoToVideoData(row.video), watchedAt: row.watchedAt, watchPercent: row.watchPercent }))];
+            const seen = new Set<string>();
+            return merged.filter((item) => {
+              const key = `${item.video.id}:${item.watchedAt}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+          });
+          setPage(nextPage);
+          setHasMoreServer(result.hasMore);
+        })
+        .catch(() => {
+          setHasMoreServer(false);
+        })
+        .finally(() => {
+          setLoadingMoreServer(false);
+        });
+    }, { rootMargin: "500px 0px" });
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMoreServer, items.length, loadingMoreServer, page, visibleCount]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, HistoryItem[]>();
-    for (const item of items) {
+    for (const item of items.slice(0, visibleCount)) {
       const day = new Date(item.watchedAt).toLocaleDateString();
       if (!map.has(day)) map.set(day, []);
       map.get(day)!.push(item);
     }
     return Array.from(map.entries()).map(([label, videos]) => ({ label, videos }));
-  }, [items]);
+  }, [items, visibleCount]);
 
   return (
     <div className="p-4 lg:p-6 max-w-4xl">
@@ -66,6 +128,8 @@ export default function HistoryPage() {
           </div>
         ))}
       </div>
+
+      {(visibleCount < items.length || hasMoreServer) && <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />}
     </div>
   );
 }

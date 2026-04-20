@@ -93,6 +93,13 @@ async function readMultipartImage(request: FastifyRequest) {
   return upload;
 }
 
+function parsePagination(query: { page?: number; limit?: number }, defaults = { page: 1, limit: 60 }) {
+  const page = Math.max(1, Number(query.page || defaults.page));
+  const limit = Math.min(100, Math.max(1, Number(query.limit || defaults.limit)));
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+}
+
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/media/:userId/:kind", async (request, reply) => {
     const { userId, kind } = request.params as { userId: string; kind: string };
@@ -361,14 +368,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
-    const items = await fastify.prisma.watchHistory.findMany({
-      where: { userId: dbUser.id },
-      include: { video: { include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } } } },
-      orderBy: { watchedAt: "desc" },
-      take: 200
-    });
+    const { page, limit, skip } = parsePagination(request.query as { page?: number; limit?: number }, { page: 1, limit: 80 });
 
-    return { items };
+    const [items, total] = await Promise.all([
+      fastify.prisma.watchHistory.findMany({
+        where: { userId: dbUser.id },
+        include: { video: { include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } } } },
+        orderBy: { watchedAt: "desc" },
+        skip,
+        take: limit
+      }),
+      fastify.prisma.watchHistory.count({ where: { userId: dbUser.id } })
+    ]);
+
+    return { items, pagination: { page, limit, total } };
   });
 
   fastify.get("/me/saved", { preHandler: requireAuth }, async (request, reply) => {
@@ -377,13 +390,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
-    const items = await fastify.prisma.savedVideo.findMany({
-      where: { userId: dbUser.id },
-      include: { video: { include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } } } },
-      orderBy: { savedAt: "desc" }
-    });
+    const { page, limit, skip } = parsePagination(request.query as { page?: number; limit?: number });
 
-    return { items };
+    const [items, total] = await Promise.all([
+      fastify.prisma.savedVideo.findMany({
+        where: { userId: dbUser.id },
+        include: { video: { include: { user: { select: { username: true, displayName: true, avatarUrl: true, subscriberCount: true, isVerified: true } } } } },
+        orderBy: { savedAt: "desc" },
+        skip,
+        take: limit
+      }),
+      fastify.prisma.savedVideo.count({ where: { userId: dbUser.id } })
+    ]);
+
+    return { items, pagination: { page, limit, total } };
   });
 
   fastify.get("/me/liked", { preHandler: requireAuth }, async (request, reply) => {
@@ -392,27 +412,34 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
-    const items = await fastify.prisma.videoLike.findMany({
-      where: { userId: dbUser.id },
-      include: {
-        video: {
-          include: {
-            user: {
-              select: {
-                username: true,
-                displayName: true,
-                avatarUrl: true,
-                subscriberCount: true,
-                isVerified: true
+    const { page, limit, skip } = parsePagination(request.query as { page?: number; limit?: number });
+
+    const [items, total] = await Promise.all([
+      fastify.prisma.videoLike.findMany({
+        where: { userId: dbUser.id },
+        include: {
+          video: {
+            include: {
+              user: {
+                select: {
+                  username: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  subscriberCount: true,
+                  isVerified: true
+                }
               }
             }
           }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit
+      }),
+      fastify.prisma.videoLike.count({ where: { userId: dbUser.id } })
+    ]);
 
-    return { items };
+    return { items, pagination: { page, limit, total } };
   });
 
   fastify.get("/me/dashboard", { preHandler: requireAuth }, async (request, reply) => {
@@ -443,12 +470,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: "User profile not found", code: "USER_NOT_FOUND" });
     }
 
-    const items = await fastify.prisma.video.findMany({
-      where: { userId: dbUser.id },
-      orderBy: [{ createdAt: "desc" }]
-    });
+    const { page, limit, skip } = parsePagination(request.query as { page?: number; limit?: number }, { page: 1, limit: 80 });
 
-    return { items };
+    const [items, total] = await Promise.all([
+      fastify.prisma.video.findMany({
+        where: { userId: dbUser.id },
+        orderBy: [{ createdAt: "desc" }],
+        skip,
+        take: limit
+      }),
+      fastify.prisma.video.count({ where: { userId: dbUser.id } })
+    ]);
+
+    return { items, pagination: { page, limit, total } };
   });
 
   fastify.get("/me/notifications", { preHandler: requireAuth }, async (request, reply) => {

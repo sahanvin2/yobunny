@@ -1,234 +1,101 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import VideoGrid from "@/components/video/VideoGrid";
-import { API_BASE, fetchAllVideos, partitionVideosByFormat } from "@/lib/api";
-import { sortFeedVideos, splitFeedVideos } from "@/lib/videoFeed";
-import { useIsMobile } from "@/hooks/use-mobile";
-import SmartImage from "@/components/ui/SmartImage";
+import ClipGrid from "@/components/video/ClipGrid";
+import { fetchVideos, isClipLikeVideo } from "@/lib/api";
+import { limitVideosPerCreator, sortShortsVideos } from "@/lib/videoFeed";
 
-const CLIPS_CAROUSEL = 80;
+const PAGE_SIZE = 60;
 
 export default function HomePage() {
-  const isMobile = useIsMobile();
-  const [desktopColumns, setDesktopColumns] = useState(5);
-  const [allVideos, setAllVideos] = useState<Awaited<ReturnType<typeof fetchAllVideos>>>([]);
-  const [feedSplit, setFeedSplit] = useState<{ clips: Awaited<ReturnType<typeof fetchAllVideos>>; landscape: Awaited<ReturnType<typeof fetchAllVideos>> }>({ clips: [], landscape: [] });
+  const [videos, setVideos] = useState<Awaited<ReturnType<typeof fetchVideos>>>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
-      setError("");
-      setLoading(true);
+    const load = async (initialLoad: boolean) => {
+      if (initialLoad) {
+        setLoading(true);
+        setError("");
+      }
 
       try {
-        const videos = await fetchAllVideos({
-          sort: "latest",
-          limitPerPage: 80,
-          maxPages: 3
-        });
-
-        if (!cancelled) {
-          setAllVideos(videos);
-        }
+        const items = await fetchVideos({ sort: "latest", page: 1, limit: PAGE_SIZE });
+        if (cancelled) return;
+        setVideos(items);
+        setPage(1);
+        setHasMore(items.length === PAGE_SIZE);
       } catch (err) {
-        if (!cancelled) {
-          setAllVideos([]);
-          setError(err instanceof Error ? err.message : "Failed to load videos");
-        }
+        if (cancelled || !initialLoad) return;
+        setVideos([]);
+        setHasMore(false);
+        setError(err instanceof Error ? err.message : "Failed to load home feed");
       } finally {
-        if (!cancelled) {
+        if (!cancelled && initialLoad) {
           setLoading(false);
         }
       }
     };
 
-    void load();
+    const refresh = () => {
+      void load(false);
+    };
+
+    void load(true);
+
+    const refreshTimer = window.setInterval(refresh, 45000);
+    window.addEventListener("focus", refresh);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 
-  useEffect(() => {
-    const updateColumns = () => {
-      const width = window.innerWidth;
-      if (width >= 1280) {
-        setDesktopColumns(5);
-      } else if (width >= 1024) {
-        setDesktopColumns(4);
-      } else if (width >= 768) {
-        setDesktopColumns(3);
-      } else {
-        setDesktopColumns(2);
-      }
-    };
-
-    updateColumns();
-    window.addEventListener("resize", updateColumns);
-    return () => window.removeEventListener("resize", updateColumns);
-  }, []);
-
-  const sortedVideos = useMemo(() => sortFeedVideos(allVideos, "popular"), [allVideos]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const baseSplit = splitFeedVideos(sortedVideos);
-
-    setFeedSplit(baseSplit);
-
-    if (baseSplit.clips.length > 0 || sortedVideos.length === 0) {
-      return () => {
-        cancelled = true;
-      };
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const nextVideos = await fetchVideos({ sort: "latest", page: nextPage, limit: PAGE_SIZE });
+      setVideos((prev) => {
+        const merged = [...prev, ...nextVideos];
+        const seen = new Set<string>();
+        return merged.filter((item) => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+      });
+      setPage(nextPage);
+      setHasMore(nextVideos.length === PAGE_SIZE);
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
     }
+  };
 
-    const detectByThumbnail = async () => {
-      try {
-        const { clips, regularVideos } = await partitionVideosByFormat(sortedVideos);
-        if (!cancelled) {
-          setFeedSplit({ clips, landscape: regularVideos });
-        }
-      } catch {
-        // Keep tag-based split if thumbnail detection fails.
-      }
-    };
-
-    void detectByThumbnail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sortedVideos]);
-
-  const firstVideoBlockSize = isMobile ? 5 : desktopColumns * 3;
-  const landscapeVideos = feedSplit.landscape.slice(0, firstVideoBlockSize);
-  const moreLandscapeVideos = feedSplit.landscape.slice(firstVideoBlockSize);
-  const clipsCarousel = feedSplit.clips.slice(0, CLIPS_CAROUSEL);
-  const skeletonCards = Math.max(Math.min(firstVideoBlockSize, 8), 4);
-
-  useEffect(() => {
-    if (loading || error || landscapeVideos.length === 0) return;
-
-    const firstVideo = landscapeVideos[0];
-    const firstThumb = firstVideo?.thumbnailUrl;
-    if (!firstThumb) return;
-    const responsiveSrcSet = firstVideo
-      ? `${API_BASE}/videos/${firstVideo.id}/thumbnail?w=320 320w, ${API_BASE}/videos/${firstVideo.id}/thumbnail?w=640 640w, ${API_BASE}/videos/${firstVideo.id}/thumbnail?w=960 960w`
-      : "";
-
-    const preload = document.createElement("link");
-    preload.rel = "preload";
-    preload.as = "image";
-    preload.href = firstThumb;
-    preload.setAttribute("fetchpriority", "high");
-    if (responsiveSrcSet) {
-      preload.setAttribute("imagesrcset", responsiveSrcSet);
-      preload.setAttribute("imagesizes", "(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 540px) 50vw, 100vw");
-    }
-    document.head.appendChild(preload);
-
-    return () => {
-      preload.remove();
-    };
-  }, [landscapeVideos, loading, error]);
+  const clips = useMemo(() => {
+    const clipLike = videos.filter(isClipLikeVideo);
+    const sorted = sortShortsVideos(clipLike.length > 0 ? clipLike : videos);
+    return limitVideosPerCreator(sorted, 3);
+  }, [videos]);
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 max-w-[1600px] mx-auto relative z-10">
-      <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-primary/10 via-primary/5 to-transparent opacity-60 pointer-events-none -z-10 rounded-t-[3rem]" />
+    <div className="p-4 lg:p-6 max-w-[1600px] mx-auto space-y-5">
+      <h1 className="text-2xl font-semibold text-foreground">Home</h1>
+      {loading && <p className="text-sm text-muted-foreground">Loading home feed...</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {loading && (
-        <div className="space-y-8" aria-hidden="true">
-          <div className="space-y-4">
-            <div className="h-7 w-44 rounded bg-white/10" />
-            <div className="grid grid-cols-1 min-[540px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8">
-              {Array.from({ length: skeletonCards }).map((_, index) => (
-                <div key={index} className="space-y-3">
-                  <div className="aspect-video rounded-2xl bg-white/10" />
-                  <div className="h-4 w-5/6 rounded bg-white/10" />
-                  <div className="h-3 w-2/3 rounded bg-white/10" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="h-7 w-40 rounded bg-white/10" />
-            <div className="h-28 rounded-2xl bg-white/10" />
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="p-10 rounded-3xl bg-red-500/10 border border-red-500/20 text-center">
-          <p className="text-red-400 font-medium">{error}</p>
-        </div>
-      )}
-
-      {!loading && !error && landscapeVideos.length > 0 && (
-        <div className="space-y-6 pt-2">
-          <div>
-            <h2 className="text-2xl font-bold text-white mb-4">Popular Videos</h2>
-          </div>
-          <VideoGrid videos={landscapeVideos} />
-        </div>
-      )}
-
-      {!loading && !error && (
-        <div className="space-y-6 pt-8">
-          <div>
-            <h2 className="text-2xl font-bold text-white mb-4">Trending Clips</h2>
-          </div>
-          {clipsCarousel.length > 0 ? (
-            <div className="overflow-x-auto pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 custom-scrollbar">
-              <div className="flex gap-3 min-w-max">
-                {clipsCarousel.map((clip, index) => (
-                  <Link key={clip.id} to={`/clips/${clip.id}`} className="group flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 w-44 h-64 md:w-52 md:h-72">
-                    <div className="relative w-full h-full block min-h-[256px] md:min-h-[288px]">
-                      <SmartImage
-                        src={clip.thumbnailUrl}
-                        alt={clip.title}
-                        priority={index === 0}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        loading={index < 3 ? "eager" : "lazy"}
-                        decoding="async"
-                        fetchPriority={index === 0 ? "high" : "auto"}
-                        width={208}
-                        height={288}
-                        sizes="(min-width: 768px) 208px, 176px"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                      <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <p className="text-sm font-semibold text-white line-clamp-2 md:text-base leading-snug">{clip.title}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-              No clips detected yet. Upload portrait videos or add the __portrait__ tag to surface clips here.
-            </div>
-          )}
-        </div>
-      )}
-
-      {!loading && !error && moreLandscapeVideos.length > 0 && (
-        <div className="space-y-6 pt-8">
-          <div>
-            <h2 className="text-2xl font-bold text-white mb-4">More Videos</h2>
-          </div>
-          <VideoGrid videos={moreLandscapeVideos} />
-        </div>
-      )}
-
-      {!loading && !error && landscapeVideos.length === 0 && clipsCarousel.length === 0 && (
-        <div className="p-20 text-center">
-          <p className="text-base font-medium text-white/40">No videos available right now.</p>
-        </div>
+      {!loading && !error && clips.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No videos available right now.</p>
+      ) : (
+        <ClipGrid clips={clips} hasMoreFromServer={hasMore} loadingMore={loadingMore} onReachEnd={loadMore} />
       )}
     </div>
   );

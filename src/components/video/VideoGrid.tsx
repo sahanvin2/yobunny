@@ -17,10 +17,6 @@ export default function VideoGrid({ videos, title, hasMoreFromServer = false, lo
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const requestLockRef = useRef(false);
 
-  useEffect(() => {
-    setVisibleCount(INITIAL_COUNT);
-  }, [videos]);
-
   const visibleVideos = useMemo(() => videos.slice(0, visibleCount), [videos, visibleCount]);
   const hasMoreLocal = visibleCount < videos.length;
   const canRequestMore = Boolean(onReachEnd && hasMoreFromServer);

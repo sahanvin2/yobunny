@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { fetchModelSummaries, fetchVideos, type ApiModelSummary } from "@/lib/api";
 import { formatViewCount, type VideoData } from "@/lib/mockData";
+import { openSmartlinkAd } from "@/lib/smartlinkAd";
 
 type DiscoverTab = "videos" | "models" | "niches";
 type SortMode = "trending" | "top_week" | "top_month" | "latest";
@@ -62,11 +63,14 @@ export default function DiscoverPage() {
   const [loadingMedia, setLoadingMedia] = useState(false);
   const [loadingMoreModels, setLoadingMoreModels] = useState(false);
   const [loadingMoreVideos, setLoadingMoreVideos] = useState(false);
+  const [visibleModelsCount, setVisibleModelsCount] = useState(40);
+  const [visibleVideosCount, setVisibleVideosCount] = useState(40);
   const [error, setError] = useState("");
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const MODELS_BATCH_SIZE = 40;
   const VIDEOS_BATCH_SIZE = 60;
+  const LOCAL_LOAD_STEP = 24;
 
   const videoApiSort: "latest" | "views" = sortMode === "latest" ? "latest" : "views";
 
@@ -89,6 +93,7 @@ export default function DiscoverPage() {
 
         if (modelsResult.status === "fulfilled") {
           setModels(modelsResult.value);
+          setVisibleModelsCount(40);
           setModelsOffset(modelsResult.value.length);
           setModelsHasMore(modelsResult.value.length === MODELS_BATCH_SIZE);
         } else {
@@ -99,6 +104,7 @@ export default function DiscoverPage() {
 
         if (videosResult.status === "fulfilled") {
           setMediaItems(videosResult.value);
+          setVisibleVideosCount(40);
           setVideosPage(1);
           setVideosHasMore(videosResult.value.length === VIDEOS_BATCH_SIZE);
         } else {
@@ -126,8 +132,19 @@ export default function DiscoverPage() {
   }, [videoApiSort]);
 
   useEffect(() => {
-    if (activeTab === "models" && !modelsHasMore) return;
-    if (activeTab === "videos" && !videosHasMore) return;
+    if (activeTab === "models") {
+      setVisibleModelsCount((count) => Math.max(40, count));
+      return;
+    }
+
+    if (activeTab === "videos") {
+      setVisibleVideosCount((count) => Math.max(40, count));
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "models" && !modelsHasMore && visibleModelsCount >= models.length) return;
+    if (activeTab === "videos" && !videosHasMore && visibleVideosCount >= mediaItems.length) return;
 
     const node = loadMoreRef.current;
     if (!node) return;
@@ -135,6 +152,11 @@ export default function DiscoverPage() {
     const observer = new IntersectionObserver((entries) => {
       const [entry] = entries;
       if (!entry?.isIntersecting) return;
+
+      if (activeTab === "models" && visibleModelsCount < models.length) {
+        setVisibleModelsCount((count) => Math.min(count + LOCAL_LOAD_STEP, models.length));
+        return;
+      }
 
       if (activeTab === "models" && !loadingModels && !loadingMoreModels && modelsHasMore) {
         setLoadingMoreModels(true);
@@ -158,6 +180,11 @@ export default function DiscoverPage() {
           .finally(() => {
             setLoadingMoreModels(false);
           });
+      }
+
+      if (activeTab === "videos" && visibleVideosCount < mediaItems.length) {
+        setVisibleVideosCount((count) => Math.min(count + LOCAL_LOAD_STEP, mediaItems.length));
+        return;
       }
 
       if (activeTab === "videos" && !loadingMedia && !loadingMoreVideos && videosHasMore) {
@@ -188,7 +215,7 @@ export default function DiscoverPage() {
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [activeTab, loadingMedia, loadingModels, loadingMoreModels, loadingMoreVideos, modelsHasMore, modelsOffset, videoApiSort, videosHasMore, videosPage]);
+  }, [activeTab, loadingMedia, loadingModels, loadingMoreModels, loadingMoreVideos, mediaItems.length, models.length, modelsHasMore, modelsOffset, videoApiSort, videosHasMore, videosPage, visibleModelsCount, visibleVideosCount]);
 
   const sortedModels = useMemo(
     () => [...models].sort((a, b) => modelScore(b, sortMode) - modelScore(a, sortMode)),
@@ -283,7 +310,7 @@ export default function DiscoverPage() {
 
       {!loadingModels && !loadingMedia && activeTab === "models" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {sortedModels.map((model) => (
+          {sortedModels.slice(0, visibleModelsCount).map((model) => (
             <Link
               key={model.slug}
               to={`/models/${model.slug}`}
@@ -318,10 +345,11 @@ export default function DiscoverPage() {
 
       {!loadingModels && !loadingMedia && activeTab === "videos" && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[2px] sm:gap-3">
-          {sortedMedia.map((item) => (
+          {sortedMedia.slice(0, visibleVideosCount).map((item) => (
             <Link
               key={item.id}
               to={`/clips/${item.id}`}
+              onClick={() => openSmartlinkAd()}
               className="group relative overflow-hidden rounded-md sm:rounded-2xl border border-white/10 bg-black/30"
             >
               <img

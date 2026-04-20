@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Bookmark, Facebook, Heart, Link as LinkIcon, MessageCircle, MoreVertical, Share2, Twitter, X } from "lucide-react";
-import { API_BASE, addComment, fetchVideoComments, fetchVideos, isClipLikeVideo, partitionVideosByFormat, reportVideoView, toggleLike, toggleSave } from "@/lib/api";
+import { API_BASE, addComment, fetchDownloadUrl, fetchVideoById, fetchVideoComments, fetchVideos, isClipLikeVideo, partitionVideosByFormat, reportVideoView, toggleLike, toggleSave } from "@/lib/api";
 import { formatRelativeTime, formatViewCount, type CommentData, type VideoData } from "@/lib/mockData";
 import { sortShortsVideos } from "@/lib/videoFeed";
 import { isAuthenticated } from "@/lib/auth";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import HlsVideoPlayer from "@/components/video/HlsVideoPlayer";
+import { openSmartlinkAd, shouldGatePlaybackStep } from "@/lib/smartlinkAd";
 
 type OverlayPanel =
   | { type: "none" }
@@ -75,6 +76,10 @@ export default function ClipsPage() {
   const [fallbackTriedById, setFallbackTriedById] = useState<Record<string, boolean>>({});
   const [panel, setPanel] = useState<OverlayPanel>({ type: "none" });
   const [playerReady, setPlayerReady] = useState(!id);
+  const [selectedClipResolved, setSelectedClipResolved] = useState(!id);
+  const [gatedVideoId, setGatedVideoId] = useState<string | null>(null);
+  const seenPlaybackOrderRef = useRef<string[]>([]);
+  const unlockedGateByIdRef = useRef<Record<string, boolean>>({});
 
   const isPlayerMode = true;
 
@@ -143,6 +148,46 @@ export default function ClipsPage() {
   }, [loadPage]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (!id) {
+      setSelectedClipResolved(true);
+      return;
+    }
+
+    if (clips.some((item) => item.id === id)) {
+      setSelectedClipResolved(true);
+      return;
+    }
+
+    setSelectedClipResolved(false);
+    void fetchVideoById(id)
+      .then((result) => {
+        if (cancelled) return;
+
+        setClips((prev) => {
+          if (prev.some((item) => item.id === result.video.id)) return prev;
+          return sortShortsVideos([result.video, ...prev]);
+        });
+
+        setSourceById((prev) => ({
+          ...prev,
+          [result.video.id]: result.playbackUrl || `${API_BASE}/videos/${result.video.id}/stream`
+        }));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setSelectedClipResolved(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, clips]);
+
+  useEffect(() => {
     if (!id || loading || loadingMore || !hasMore) return;
     if (clips.some((item) => item.id === id)) return;
     void loadPage(page + 1);
@@ -166,12 +211,12 @@ export default function ClipsPage() {
       return;
     }
 
-    if (!loading && !loadingMore && !hasMore) {
+    if (!loading && !loadingMore && !hasMore && selectedClipResolved) {
       setStatus("Clip not found");
       window.setTimeout(() => setStatus(""), 1500);
       navigate("/clips", { replace: true });
     }
-  }, [clips, hasMore, id, isPlayerMode, loading, loadingMore, navigate]);
+  }, [clips, hasMore, id, isPlayerMode, loading, loadingMore, navigate, selectedClipResolved]);
 
   useEffect(() => {
     if (!gridSentinelRef.current || isPlayerMode) return;
@@ -235,6 +280,24 @@ export default function ClipsPage() {
             if (id !== videoId) {
               navigate(`/clips/${videoId}`, { replace: true });
             }
+
+            if (!seenPlaybackOrderRef.current.includes(videoId)) {
+              seenPlaybackOrderRef.current.push(videoId);
+            }
+
+            const playbackStep = seenPlaybackOrderRef.current.indexOf(videoId) + 1;
+            const needsGate = shouldGatePlaybackStep(playbackStep) && !unlockedGateByIdRef.current[videoId];
+
+            if (needsGate) {
+              setGatedVideoId(videoId);
+              if (videoEl) videoEl.pause();
+              return;
+            }
+
+            if (gatedVideoId === videoId) {
+              setGatedVideoId(null);
+            }
+
             if (videoEl) {
               void videoEl.play().catch(() => undefined);
             }
@@ -253,7 +316,7 @@ export default function ClipsPage() {
     });
 
     return () => observer.disconnect();
-  }, [clips, id, isPlayerMode, navigate]);
+  }, [clips, gatedVideoId, id, isPlayerMode, navigate]);
 
   const onShare = useCallback(async (videoId: string) => {
     const url = `${window.location.origin}/clips/${videoId}`;
@@ -362,6 +425,12 @@ export default function ClipsPage() {
   }, []);
 
   const onTogglePlay = useCallback((videoId: string) => {
+    if (gatedVideoId === videoId && !unlockedGateByIdRef.current[videoId]) {
+      openSmartlinkAd();
+      unlockedGateByIdRef.current[videoId] = true;
+      setGatedVideoId(null);
+    }
+
     const videoEl = videoRefs.current[videoId];
     if (!videoEl) return;
     if (videoEl.paused) {
@@ -369,15 +438,41 @@ export default function ClipsPage() {
     } else {
       videoEl.pause();
     }
+  }, [gatedVideoId]);
+
+  const onDownload = useCallback(async (videoId: string) => {
+    openSmartlinkAd();
+
+    try {
+      const url = await fetchDownloadUrl(videoId);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `video-${videoId}.mp4`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(blobUrl);
+      setStatus("Download started");
+      window.setTimeout(() => setStatus(""), 1200);
+    } catch {
+      setStatus("Download failed");
+      window.setTimeout(() => setStatus(""), 1200);
+    }
   }, []);
 
-  const shorts = useMemo(() => clips.filter(isClipLikeVideo), [clips]);
+  const displayClips = useMemo(() => {
+    const shorts = clips.filter(isClipLikeVideo);
+    return shorts.length > 0 ? shorts : clips;
+  }, [clips]);
 
   if (loading) {
     return <div className="p-4 lg:p-6 text-sm text-muted-foreground">Loading clips...</div>;
   }
 
-  if (shorts.length === 0) {
+  if (displayClips.length === 0) {
     return <div className="p-4 lg:p-6 text-sm text-muted-foreground">No clips available yet.</div>;
   }
 
@@ -388,7 +483,7 @@ export default function ClipsPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[radial-gradient(circle_at_top,rgba(22,22,22,0.9),rgba(0,0,0,1)_60%)] text-white py-6">
       <div className="space-y-6">
-        {shorts.map((video) => {
+        {displayClips.map((video) => {
           const isActive = activeVideoId === video.id;
           const primaryModel = getPrimaryModel(video);
           return (
@@ -426,6 +521,18 @@ export default function ClipsPage() {
                   onEnded={() => markViewReported(video.id)}
                   className="w-full h-full object-cover"
                 />
+
+                {gatedVideoId === video.id && !unlockedGateByIdRef.current[video.id] && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/65">
+                    <button
+                      type="button"
+                      onClick={() => onTogglePlay(video.id)}
+                      className="px-6 py-3 rounded-full bg-white text-black text-sm font-semibold shadow-xl"
+                    >
+                      Play video
+                    </button>
+                  </div>
+                )}
 
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/70 via-transparent to-black/80" />
 
@@ -554,6 +661,9 @@ export default function ClipsPage() {
                         <div className="space-y-2 pb-4">
                           <button type="button" className="w-full h-11 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90 hover:bg-white/10 transition-colors text-left px-4" onClick={() => { setStatus("Added to watch later"); setPanel({ type: "none" }); window.setTimeout(() => setStatus(""), 1200); }}>
                             Add to watch later
+                          </button>
+                          <button type="button" className="w-full h-11 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90 hover:bg-white/10 transition-colors text-left px-4" onClick={() => { void onDownload(panel.videoId); setPanel({ type: "none" }); }}>
+                            Download
                           </button>
                           <button type="button" className="w-full h-11 rounded-xl border border-white/10 bg-white/5 text-sm text-white/90 hover:bg-white/10 transition-colors text-left px-4" onClick={() => { setStatus("We will show less like this"); setPanel({ type: "none" }); window.setTimeout(() => setStatus(""), 1200); }}>
                             Not interested

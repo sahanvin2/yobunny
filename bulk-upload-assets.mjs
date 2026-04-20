@@ -33,6 +33,7 @@ const CLEAN_RESERVED_ON_START = !["0", "false", "no"].includes(String(process.en
 const RESERVED_MAX_AGE_MINUTES = Math.min(Math.max(Number.parseInt(process.env.RESERVED_MAX_AGE_MINUTES ?? "30", 10) || 30, 1), 1440);
 const PROGRESS_LOG_INTERVAL_MS = Math.min(Math.max(Number.parseInt(process.env.PROGRESS_LOG_INTERVAL_MS ?? "60000", 10) || 60000, 10000), 600000);
 const MODEL_NAMES_RAW = String(process.env.MODEL_NAMES ?? "").trim();
+const MODEL_TAG_STRATEGY = String(process.env.MODEL_TAG_STRATEGY ?? "per-file").trim().toLowerCase();
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"]);
 const TAG_STOP_WORDS = new Set([
@@ -421,6 +422,38 @@ function deriveModelNames(assetsDir) {
   return fallback ? [fallback] : [];
 }
 
+function deriveModelNamesForFile(filePath, assetsDir) {
+  const absoluteAssetsDir = path.resolve(assetsDir);
+  const absoluteFilePath = path.resolve(filePath);
+
+  if (MODEL_TAG_STRATEGY === "fixed") {
+    return deriveModelNames(absoluteAssetsDir);
+  }
+
+  const relative = path.relative(absoluteAssetsDir, absoluteFilePath);
+  const segments = relative.split(path.sep).filter(Boolean);
+  if (segments.length >= 2) {
+    const folderModel = segments[0].replace(/[_-]+/g, " ").trim();
+    if (folderModel) {
+      return [folderModel];
+    }
+  }
+
+  if (MODEL_NAMES_RAW) {
+    return MODEL_NAMES_RAW
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
+
+  const fileParent = path.basename(path.dirname(absoluteFilePath)).replace(/[_-]+/g, " ").trim();
+  if (fileParent) {
+    return [fileParent];
+  }
+
+  return deriveModelNames(absoluteAssetsDir);
+}
+
 async function uploadOne(filePath, index, total, creatorChannelId, signature, modelNames) {
   const fileName = path.basename(filePath);
   const title = toCleanTitle(fileName);
@@ -539,12 +572,17 @@ async function main() {
   console.log(`Reserved max age (minutes): ${RESERVED_MAX_AGE_MINUTES}`);
   console.log(`Progress log interval (ms): ${PROGRESS_LOG_INTERVAL_MS}`);
 
-  const modelNames = deriveModelNames(absoluteAssetsDir);
-  if (modelNames.length === 0) {
+  const startupModelNames = deriveModelNames(absoluteAssetsDir);
+  if (startupModelNames.length === 0 && MODEL_TAG_STRATEGY === "fixed") {
     console.error("MODEL_NAMES is required or source folder name must be usable as model name.");
     return 1;
   }
-  console.log(`Model tags: ${modelNames.join(", ")}`);
+  if (MODEL_TAG_STRATEGY === "fixed") {
+    console.log(`Model tag strategy: fixed`);
+    console.log(`Model tags: ${startupModelNames.join(", ")}`);
+  } else {
+    console.log(`Model tag strategy: per-file (derived from folder structure)`);
+  }
 
   const creatorChannelId = await resolveCreatorChannelId();
   console.log(`Creator channel: ${creatorChannelId}`);
@@ -711,6 +749,7 @@ async function main() {
       while (attempt < MAX_RETRIES) {
         attempt += 1;
         try {
+          const modelNames = deriveModelNamesForFile(filePath, absoluteAssetsDir);
           uploaded = await uploadOne(filePath, index, files.length, creatorChannelId, signature, modelNames);
           break;
         } catch (error) {
